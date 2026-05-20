@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CCWF Civil Works — Site Diary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#F2F0EB;
+  --surface:#FFFFFF;
+  --border:#DDD9D0;
+  --border-light:#EAE7E0;
+  --green:#1F5C2E;
+  --green-mid:#2E7D3E;
+  --green-light:#E8F3EA;
+  --green-accent:#3A9B50;
+  --amber:#7B5E00;
+  --amber-bg:#FFF8E1;
+  --amber-border:#FFD54F;
+  --red:#C0392B;
+  --red-bg:#FDECEA;
+  --text:#1A1A1A;
+  --text-2:#4A4A4A;
+  --text-3:#888;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);
+  --radius:8px;
+  --radius-sm:5px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+/* Layout */
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.sidebar{background:var(--green);padding:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sidebar-header{padding:24px 20px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-logo{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px}
+.sidebar-project{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:#fff;line-height:1.2}
+.sidebar-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:4px}
+.sidebar-nav{padding:16px 10px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;color:rgba(255,255,255,.6);font-size:13px;font-weight:500;transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{color:#fff;background:rgba(255,255,255,.08)}
+.nav-item.on{color:#fff;background:rgba(255,255,255,.15)}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1)}
+
+.sidebar-action-btn{width:100%;font-size:12px;padding:7px 12px;border-radius:var(--radius-sm);border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:500;text-align:left;transition:all .15s}
+.sidebar-action-btn:hover{background:rgba(255,255,255,.15);color:#fff}
+
+.lock-btn{display:flex;align-items:center;gap:5px;font-size:12px;padding:6px 14px;border-radius:var(--radius-sm);border:1.5px solid #888;background:none;color:#888;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s}
+.lock-btn:hover{border-color:var(--text);color:var(--text)}
+.save-day-btn{display:flex;align-items:center;gap:5px;font-size:12px;padding:6px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--green-mid);background:var(--green);color:#fff;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s}
+.save-day-btn:hover{background:var(--green-mid)}
+.save-day-btn:disabled{opacity:.5;cursor:wait}
+.unlock-btn{display:flex;align-items:center;gap:5px;font-size:12px;padding:6px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--amber);background:var(--amber-bg);color:var(--amber);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s}
+.lock-banner{background:#E8F3EA;border:1px solid var(--green-mid);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--green);display:flex;align-items:center;gap:8px;margin-bottom:16px;font-weight:500}
+.edit-btn{font-size:12px;padding:5px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--green-mid);background:var(--green-light);color:var(--green);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s;white-space:nowrap}
+.edit-btn:hover{background:var(--green);color:#fff}
+.locked-badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:#E8F3EA;color:var(--green);border:1px solid var(--green-mid);white-space:nowrap}
+.rec-card.locked{border-left:3px solid var(--green-mid)}
+.form-disabled input,.form-disabled select,.form-disabled textarea,.form-disabled button:not(.unlock-trigger){pointer-events:none;opacity:.5}
+.sidebar-date{font-family:'DM Mono',monospace;font-size:11px;color:rgba(255,255,255,.4)}
+.main{padding:32px 40px;overflow-y:auto}
+/* Cards */
+.page-title{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;letter-spacing:.01em;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--text-3);margin-bottom:28px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px}
+/* Weather */
+.wx-row{display:flex;gap:8px;flex-wrap:wrap}
+.wx-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:none;cursor:pointer;font-size:13px;font-family:'Barlow',sans-serif;color:var(--text-2);transition:all .15s;font-weight:500}
+.wx-btn:hover{border-color:var(--green-mid);color:var(--green)}
+.wx-btn.on{border-color:var(--green-mid);background:var(--green-light);color:var(--green)}
+.wx-icon{font-size:16px}
+/* Plant/Personnel */
+.on-site-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.on-site-empty{font-size:12px;color:var(--text-3);padding:8px 0;font-style:italic}
+.on-site-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border-light)}
+.on-site-item.plant-type{border-left:3px solid var(--green-accent)}
+.on-site-item.pers-type{border-left:3px solid var(--green)}
+.on-site-item.dimmed{opacity:.4}
+.item-info-name{font-size:13px;font-weight:600;color:var(--text)}
+.item-info-rate{font-size:11px;color:var(--text-3);font-family:'DM Mono',monospace;margin-top:2px}
+.rm-btn{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--red);background:none;border:1px solid var(--red);border-radius:var(--radius-sm);padding:4px 10px;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:500;transition:all .15s}
+.rm-btn:hover{background:var(--red-bg)}
+.add-row{display:flex;gap:8px}
+.add-select{flex:1;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-family:'Barlow',sans-serif;cursor:pointer}
+.add-select:focus{outline:none;border-color:var(--green-mid)}
+.add-btn{display:flex;align-items:center;gap:6px;font-size:13px;padding:8px 18px;border-radius:var(--radius-sm);border:1.5px solid var(--green-mid);background:var(--green-light);color:var(--green);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s;white-space:nowrap}
+.add-btn:hover{background:var(--green);color:#fff}
+.add-btn:disabled{opacity:.35;pointer-events:none}
+.divider{height:1px;background:var(--border-light);margin:16px 0}
+/* Works */
+.works-list{display:flex;flex-direction:column;gap:3px}
+.work-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--radius-sm);border:1.5px solid transparent;cursor:pointer;transition:all .12s}
+.work-item:hover{background:var(--bg)}
+.work-item.sel{border-color:var(--border);background:var(--bg)}
+.work-cb{width:18px;height:18px;min-width:18px;border-radius:4px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;font-size:11px;color:#fff}
+.work-cb.done{background:var(--green-mid);border-color:var(--green-mid)}
+.work-label{font-size:13px;line-height:1.4;flex:1;color:var(--text-2)}
+.work-done-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:none;cursor:pointer;color:var(--text-3);white-space:nowrap;font-family:'Barlow',sans-serif;font-weight:500;transition:all .15s}
+.work-done-btn:hover{border-color:var(--green-mid);color:var(--green)}
+.work-done-btn.done{background:var(--green-light);border-color:var(--green-mid);color:var(--green)}
+.sec-hdr{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);padding:10px 0 4px;border-top:1px solid var(--border-light);margin-top:4px}
+.sec-hdr:first-child{border-top:none;margin-top:0;padding-top:0}
+.hint{display:flex;gap:6px;font-size:11px;color:var(--text-3);margin-bottom:12px;padding:8px 10px;background:var(--bg);border-radius:var(--radius-sm);line-height:1.5;border:1px solid var(--border-light)}
+/* Inputs */
+.text-input{width:100%;font-size:13px;padding:8px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-family:'Barlow',sans-serif;transition:border-color .15s}
+.text-input:focus{outline:none;border-color:var(--green-mid)}
+textarea.text-input{resize:vertical;min-height:80px}
+/* Fuel/SD */
+.fuel-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.fuel-input{width:90px;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--surface);color:var(--text);text-align:right;font-family:'DM Mono',monospace}
+.fuel-input:focus{outline:none;border-color:var(--green-mid)}
+.fuel-label{font-size:13px;color:var(--text-2);font-weight:500}
+.fuel-calc{font-family:'DM Mono',monospace;font-size:13px;color:var(--text-3)}
+.sd-row{display:flex;align-items:center;gap:10px;font-size:13px}
+.sd-check{width:18px;height:18px;cursor:pointer;accent-color:var(--green-mid)}
+.sd-banner{background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--amber);display:flex;align-items:flex-start;gap:8px;margin-top:10px;line-height:1.5}
+/* Day total */
+.total-bar{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;background:var(--green);border-radius:var(--radius);margin-top:4px}
+.total-label{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:.05em;color:rgba(255,255,255,.7);text-transform:uppercase}
+.total-val{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;color:#fff}
+.total-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px}
+.save-indicator{font-size:11px;color:var(--text-3);transition:opacity .3s;opacity:0}
+.save-indicator.show{opacity:1}
+/* Top action bar */
+.action-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.action-bar-left{display:flex;flex-direction:column}
+.view-sheet-btn{display:flex;align-items:center;gap:6px;font-size:13px;padding:8px 18px;border-radius:var(--radius-sm);border:1.5px solid var(--green-mid);background:var(--green-light);color:var(--green);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s}
+.view-sheet-btn:hover{background:var(--green);color:#fff}
+/* Records */
+.rec-list{display:flex;flex-direction:column;gap:8px}
+.rec-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.rec-hdr{display:flex;align-items:center;gap:14px;padding:14px 20px}
+.rec-date{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;min-width:100px;color:var(--text)}
+.rec-today-badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:var(--green-light);border:1px solid var(--green-mid);border-radius:20px;padding:1px 8px;margin-left:-6px}
+.rec-meta{font-size:12px;color:var(--text-3);flex:1;line-height:1.4}
+.rec-cost{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--green);white-space:nowrap;margin-right:8px}
+.sheet-btn{display:flex;align-items:center;gap:5px;font-size:12px;padding:6px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:500;color:var(--text-2);transition:all .15s;white-space:nowrap}
+.sheet-btn:hover{border-color:var(--green-mid);color:var(--green);background:var(--green-light)}
+.project-total-row{display:flex;justify-content:flex-end;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--border);margin-top:8px}
+.project-total-label{font-size:13px;color:var(--text-3);font-weight:500}
+.project-total-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--green)}
+/* Summary */
+.smry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
+.smry-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);text-align:center}
+.smry-num{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--green)}
+.smry-lbl{font-size:11px;color:var(--text-3);margin-top:4px;font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+.prog-bar{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin:8px 0 4px;border:1px solid var(--border-light)}
+.prog-fill{height:100%;background:var(--green-mid);border-radius:4px;transition:width .4s}
+.scope-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px}
+.scope-row:last-child{border-bottom:none}
+.scope-done{color:var(--text);font-weight:500}
+.scope-pending{color:var(--text-3)}
+.scope-icon{font-size:15px;flex-shrink:0}
+.cost-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px}
+.cost-row:last-child{border-bottom:none}
+.cost-item{color:var(--text-2)}
+.cost-val{font-family:'DM Mono',monospace;color:var(--text)}
+/* Day Sheet Modal */
+.sheet-modal{position:fixed;inset:0;background:#fff;z-index:1000;display:none;flex-direction:column}
+.sheet-modal.open{display:flex}
+.sheet-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 32px;border-bottom:1px solid var(--border);background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;color:var(--text-2);background:none;border:none;font-family:'Barlow',sans-serif;font-weight:600;padding:6px 0}
+.back-btn:hover{color:var(--green)}
+.toolbar-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:600;color:var(--text-3)}
+.pdf-btn{display:flex;align-items:center;gap:6px;font-size:13px;padding:8px 20px;border-radius:var(--radius-sm);border:none;background:var(--green);color:#fff;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;transition:all .15s}
+.pdf-btn:hover{background:var(--green-mid)}
+.sheet-scroll{flex:1;overflow-y:auto;padding:48px;display:flex;justify-content:center}
+.sheet-doc{width:100%;max-width:680px}
+/* Day sheet document styles */
+.doc-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:3px solid var(--green);margin-bottom:28px}
+.doc-logo-block{}
+.doc-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px}
+.doc-title{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:700;color:var(--green);line-height:1}
+.doc-sub{font-family:'Barlow Condensed',sans-serif;font-size:15px;color:var(--text-3);margin-top:3px}
+.doc-meta-block{text-align:right}
+.doc-date{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--text)}
+.doc-meta-grid{display:grid;grid-template-columns:auto auto;gap:2px 16px;margin-top:6px;text-align:left}
+.doc-meta-label{font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.doc-meta-val{font-size:12px;color:var(--text);font-weight:500}
+.doc-section{margin-bottom:24px}
+.doc-section-title{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green);border-bottom:1px solid var(--green-light);padding-bottom:6px;margin-bottom:12px}
+.doc-table{width:100%;border-collapse:collapse;font-size:13px}
+.doc-table th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);padding:4px 8px;border-bottom:1px solid var(--border)}
+.doc-table th:last-child,.doc-table td:last-child{text-align:right}
+.doc-table td{padding:8px 8px;border-bottom:1px solid var(--border-light);color:var(--text-2)}
+.doc-table td.mono{font-family:'DM Mono',monospace;font-weight:500;color:var(--text)}
+.doc-table tfoot td{font-weight:600;border-top:2px solid var(--border);border-bottom:none;padding-top:10px;color:var(--text)}
+.doc-table tfoot td.mono{color:var(--green)}
+.doc-works-item{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px}
+.doc-works-item:last-child{border-bottom:none}
+.doc-badge{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.badge-done{background:var(--green-light);color:var(--green);border:1px solid var(--green-mid)}
+.badge-prog{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.doc-total{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;background:var(--green);border-radius:var(--radius);margin-top:28px}
+.doc-total-label{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.doc-total-val{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:#fff}
+.doc-notes{font-size:13px;color:var(--text-2);line-height:1.7;padding:12px 16px;background:var(--bg);border-radius:var(--radius-sm);border-left:3px solid var(--green-mid)}
+.doc-footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em}
+.doc-sec-sub{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin:12px 0 6px}
+.no-works{font-size:13px;color:var(--text-3);font-style:italic;padding:4px 0}
+
+/* ── Photo evidence ──────────────────────────────── */
+.scope-row{display:flex;align-items:center;gap:8px}
+.scope-photo-btn{display:inline-flex;align-items:center;gap:4px;margin-left:auto;padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-3);cursor:pointer;font-size:11px;font-family:'Barlow',sans-serif;transition:all .15s}
+.scope-photo-btn:hover{border-color:var(--green-mid);color:var(--green);background:var(--green-light)}
+.scope-photo-btn.has-photos{border-color:var(--green-mid);background:var(--green-light);color:var(--green)}
+.scope-photo-btn svg{width:14px;height:14px}
+.scope-photo-count{font-weight:600;font-family:'DM Mono',monospace}
+.scope-rm-btn{padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text-3);cursor:pointer;font-size:11px;font-family:'Barlow',sans-serif}
+.scope-rm-btn:hover{border-color:var(--red);color:var(--red)}
+.add-custom-scope-row{display:flex;align-items:center;gap:8px;padding:12px 0 4px;border-top:1px dashed var(--border-light);margin-top:10px;flex-wrap:wrap}
+.add-custom-scope-row input{flex:1;min-width:140px;font-size:13px;padding:7px 10px;border-radius:5px;border:1.5px solid var(--border);font-family:'Barlow',sans-serif;background:var(--surface);color:var(--text)}
+.add-custom-scope-row input:focus{outline:none;border-color:var(--green-mid)}
+.photo-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1100;display:none;flex-direction:column;padding:0}
+.photo-modal.open{display:flex}
+.photo-modal-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#1A1A1A;color:#fff;font-family:'Barlow',sans-serif;gap:8px;flex-wrap:wrap}
+.photo-modal-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:600;flex:1;padding-right:12px;min-width:160px}
+.photo-modal-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;font-size:13px;padding:7px 14px;border-radius:5px;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:500}
+.photo-modal-btn:hover{background:rgba(255,255,255,.1)}
+.photo-modal-btn.primary{border-color:var(--green-mid);background:var(--green-mid)}
+.photo-modal-btn.primary:hover{background:var(--green)}
+.photo-modal-body{flex:1;overflow-y:auto;padding:20px;background:#0e0e0e}
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.photo-tile{background:#1f1f1f;border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.photo-tile-img{width:100%;height:160px;object-fit:cover;background:#000;cursor:zoom-in;display:block}
+.photo-tile-meta{padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.photo-tile-caption{width:100%;background:#0e0e0e;border:1px solid #2a2a2a;color:#eee;font-size:12px;padding:6px 8px;border-radius:4px;font-family:'Barlow',sans-serif;resize:vertical;min-height:36px}
+.photo-tile-caption:focus{outline:none;border-color:var(--green-mid)}
+.photo-tile-actions{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#888;font-family:'DM Mono',monospace}
+.photo-tile-del{background:none;border:1px solid #553;color:#a66;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:'Barlow',sans-serif}
+.photo-tile-del:hover{background:#3d1f1f;border-color:#a55;color:#fff}
+.photo-empty{text-align:center;color:#aaa;padding:50px 20px;font-size:13px}
+.photo-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.96);z-index:1200;display:none;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+.photo-lightbox.open{display:flex}
+.photo-lightbox img{max-width:95vw;max-height:95vh;object-fit:contain}
+.upload-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1300;display:none;align-items:center;justify-content:center;color:#fff;font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;gap:12px}
+.upload-overlay.open{display:flex}
+.upload-overlay .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Responsive / Mobile ─────────────────────────── */
+@media (max-width: 768px) {
+  .app{display:flex;flex-direction:column;min-height:100vh}
+  .sidebar{position:fixed;bottom:0;left:0;right:0;top:auto;height:auto;flex-direction:row;z-index:50;border-top:1px solid rgba(255,255,255,.15)}
+  .sidebar-header{display:none}
+  .sidebar-nav{display:flex;flex-direction:row;padding:0;flex:1;gap:0}
+  .nav-item{flex:1;flex-direction:column;gap:3px;padding:10px 4px;font-size:10px;border-bottom:none;border-top:2px solid transparent;justify-content:center;text-align:center}
+  .nav-item.on{border-top-color:#fff;background:rgba(255,255,255,.12)}
+  .nav-icon{font-size:20px;width:auto}
+  .sidebar-footer{display:none}
+  .main{padding:16px;padding-bottom:80px;overflow-y:auto;flex:1}
+  .sheet-modal .sheet-scroll{padding:16px 16px 80px}
+  .sheet-toolbar{padding:10px 16px}
+  .smry-grid{grid-template-columns:repeat(2,1fr)}
+  .doc-header{flex-direction:column;gap:12px}
+  .doc-meta-block{text-align:left}
+  .action-bar{flex-wrap:wrap;gap:10px}
+  .rec-hdr{flex-wrap:wrap;gap:8px}
+  .rec-hdr>div:last-child{width:100%;justify-content:flex-start}
+  .add-row{flex-wrap:nowrap}
+  .fuel-row{flex-wrap:wrap;gap:6px}
+  .on-site-item{flex-wrap:wrap;gap:8px}
+  .sheet-body{padding:1rem 1rem 5rem}
+  .work-item{flex-wrap:wrap}
+}
+@media (max-width: 480px) {
+  .smry-grid{grid-template-columns:1fr}
+  .page-title{font-size:22px}
+  .total-val{font-size:20px}
+  .doc-title{font-size:24px}
+}
+
+@media (max-width: 768px) {
+  .add-btn,.rm-btn,.wx-btn,.work-done-btn,.view-sheet-btn,.lock-btn,.unlock-btn,.sheet-btn,.edit-btn,.pdf-btn,.back-btn{min-height:40px}
+  .add-select,.text-input,.fuel-input{min-height:40px;font-size:16px}
+  .work-item{min-height:44px}
+  .on-site-item{padding:12px 14px}
+  .card{padding:16px}
+}
+</style>
+</head>
+<body>
+
+<!-- Login overlay -->
+<div id="login-overlay" style="display:flex;position:fixed;inset:0;background:var(--green);z-index:200;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:12px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px">Civil Works Site Diary</div>
+      <div style="font-size:28px;font-weight:700;color:var(--green);font-family:'Barlow Condensed',sans-serif;line-height:1.1">Clarke Creek<br>Wind Farm</div>
+      <div style="font-size:13px;color:var(--text-3);margin-top:8px">Sign in to continue</div>
+    </div>
+    <input id="login-email" type="email" placeholder="Email address" style="width:100%;font-size:14px;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);margin-bottom:10px;font-family:'Barlow',sans-serif;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+    <input id="login-password" type="password" placeholder="Password" style="width:100%;font-size:14px;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);margin-bottom:6px;font-family:'Barlow',sans-serif;outline:none" onkeydown="if(event.key==='Enter')handleLogin()">
+    <div id="login-error" style="color:#C0392B;font-size:12px;min-height:18px;margin-bottom:10px"></div>
+    <button id="login-btn" onclick="handleLogin()" style="width:100%;font-size:14px;padding:12px;border-radius:6px;border:none;background:var(--green);color:#fff;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:700;letter-spacing:.02em;transition:background .15s">Sign in</button>
+    <div style="margin-top:16px;font-size:12px;color:var(--text-3);text-align:center">Access is by invitation only.<br>Contact your administrator if you need access.</div>
+  </div>
+</div>
+
+<div class="app" id="app" style="display:none">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">Civil Works</div>
+      <div class="sidebar-project">Clarke Creek<br>Wind Farm</div>
+      <div class="sidebar-sub">Part D — Civil Scope</div>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-item on" id="nav-today" onclick="sw('today')">
+        <span class="nav-icon">📋</span> Today
+      </button>
+      <button class="nav-item" id="nav-rec" onclick="sw('rec')">
+        <span class="nav-icon">🗂</span> Records
+      </button>
+      <button class="nav-item" id="nav-smry" onclick="sw('smry')">
+        <span class="nav-icon">📊</span> Summary
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="sidebar-date" id="sidebar-date"></div>
+      <div id="sidebar-user" style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px;word-break:break-all"></div>
+      <span id="admin-badge" style="display:none;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:#fff;border-radius:20px;padding:1px 8px;margin-top:4px;display:none">Admin</span>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
+        <button class="sidebar-action-btn" onclick="exportData()">&#x2B07; Export backup</button>
+        <button class="sidebar-action-btn" onclick="document.getElementById('import-input').click()">&#x2B06; Import backup</button>
+        <input type="file" id="import-input" accept=".json" style="display:none" onchange="importData(event)">
+        <button class="sidebar-action-btn" onclick="handleLogout()" style="border-color:rgba(255,100,100,.4);color:rgba(255,160,160,.8)">&#x2192; Sign out</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main">
+    <div id="p-today"></div>
+    <div id="p-rec" style="display:none"></div>
+    <div id="p-smry" style="display:none"></div>
+  </main>
+</div>
+
+<!-- Edit Past Day Modal -->
+<!-- Edit Past Day Modal -->
+<div class="sheet-modal" id="edit-modal">
+  <div class="sheet-toolbar">
+    <button class="back-btn" onclick="closeEditModal()">← Back to Records</button>
+    <span class="toolbar-title" id="edit-modal-title">Edit Day</span>
+    <div style="display:flex;gap:8px" id="edit-modal-actions"></div>
+  </div>
+  <div class="sheet-scroll">
+    <div id="edit-modal-body" style="max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem"></div>
+  </div>
+</div>
+
+<!-- Photo evidence modal -->
+<div class="photo-modal" id="photo-modal">
+  <div class="photo-modal-bar">
+    <span class="photo-modal-title" id="photo-modal-title">Photos</span>
+    <input type="file" id="photo-upload-input" accept="image/*" capture="environment" multiple style="display:none" onchange="handlePhotoUpload(event)">
+    <button class="photo-modal-btn primary" onclick="document.getElementById('photo-upload-input').click()">+ Add photo</button>
+    <button class="photo-modal-btn" onclick="closePhotoModal()">Close</button>
+  </div>
+  <div class="photo-modal-body" id="photo-modal-body"></div>
+</div>
+
+<!-- Fullscreen photo lightbox -->
+<div class="photo-lightbox" id="photo-lightbox" onclick="closeLightbox()">
+  <img id="photo-lightbox-img" src="" alt="">
+</div>
+
+<!-- Upload progress overlay -->
+<div class="upload-overlay" id="upload-overlay">
+  <div class="spinner"></div>
+  <span id="upload-msg">Uploading…</span>
+</div>
+
+<!-- Day Sheet Modal -->
+<div class="sheet-modal" id="sheet-modal">
+  <div class="sheet-toolbar">
+    <button class="back-btn" onclick="closeSheet()">← Back</button>
+    <span class="toolbar-title" id="sheet-modal-title">Day Sheet</span>
+    <button class="pdf-btn" id="pdf-btn" onclick="generatePDF()">⬇ Download PDF</button>
+  </div>
+  <div class="sheet-scroll">
+    <div class="sheet-doc" id="sheet-doc"></div>
+  </div>
+</div>
+
+<script>
+const KEY='ccwf_diary_v1';
+const SUPA_URL='https://hvxyqfbzmbuejjundnat.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2eHlxZmJ6bWJ1ZWpqdW5kbmF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODI0MTAsImV4cCI6MjA5NDM1ODQxMH0.Bx0VV2KtltzzyUqtWtBxeAP_-sbbyMjbolN_JoPgE1I';
+const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+const PLANT_RATES={'Cat 140m Grader':2779.90,'13t Smooth Drum Roller':1265,'13t Padfoot Roller':1265,'14000L Water Truck':1803.43,'14t Excavator':2049,'1000L Fuel Trailer':491.05,'Site Ute':190};
+const PERS_RATES={'Manager / Supervisor':1100,'Labourer':795.50};
+const ALL_RATES={...PLANT_RATES,...PERS_RATES};
+const PLANT=Object.keys(PLANT_RATES),PERS=Object.keys(PERS_RATES);
+const FUEL_R=2.50,SD_R=5922.95;
+const SECS=[
+  {lbl:'Track Rectification',items:['Access 4 to the central substation','Central sub access track','T70 to T69','Cow creek to 50 intersection','T50 to T49','T36 to T35','Red hill and Slippery hill',"Sean's track",'33 to 3 ways in sections','T26 to T27','T23 to T21',"T31 to 30 down Tom's track",'T78 to T80 through Devils elbow','T80 to T81','T81 to T82','T90 hill','T111 to T100','T100 to T99','T96 to T95','T111 to T103','T84 to T83','Jacks hill']},
+  {lbl:'Powerline Access Track',items:['Build up ~40m of road by 500mm — crossfall east to west','Install pipe with scour protection (prevent batter wash)','Bench in to scour and rebuild batter for safe access']}
+];
+const FLAT=[];
+SECS.forEach((s,si)=>s.items.forEach((item,ii)=>FLAT.push({id:`s${si}_${ii}`,label:item,sec:s.lbl})));
+const WX=[{k:'sunny',e:'☀️',lbl:'Sunny'},{k:'cloudy',e:'⛅',lbl:'Cloudy'},{k:'wet',e:'🌧',lbl:'Wet'},{k:'storm',e:'⛈',lbl:'Storm'}];
+const TOTAL=FLAT.length;
+
+let currentUser=null;
+let allUsersDiary={};  // admin only: {userId: {email, records}}
+
+function isAdmin(){return currentUser?.email==='degen.runge@squadronenergy.com';}
+
+// ── Auth ─────────────────────────────────────────
+async function initAuth(){
+  try{
+    const timeout=new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),8000));
+    const sessionReq=sb.auth.getSession();
+    const {data:{session}}=await Promise.race([sessionReq,timeout]);
+    if(session){currentUser=session.user;showApp();await load();}
+    else showLogin();
+  }catch(e){
+    console.error('Auth init error:',e);
+    showLogin();
+    if(e.message==='timeout'){
+      document.getElementById('login-error').textContent='Connection timed out. Check your internet connection.';
+    }
+  }
+  sb.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN'){currentUser=session.user;showApp();await load();}
+    else if(event==='SIGNED_OUT'){currentUser=null;diary={};allUsersDiary={};showLogin();}
+  });
+}
+
+function showLogin(){
+  document.getElementById('login-overlay').style.display='flex';
+  document.getElementById('app').style.display='none';
+}
+
+function showApp(){
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('app').style.display='grid';
+  const uEl=document.getElementById('sidebar-user');
+  if(uEl)uEl.textContent=currentUser?.email||'';
+  const aEl=document.getElementById('admin-badge');
+  if(aEl)aEl.style.display=isAdmin()?'inline':'none';
+}
+
+async function handleLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  const errEl=document.getElementById('login-error');
+  const btn=document.getElementById('login-btn');
+  if(!email||!pass){errEl.textContent='Please enter your email and password.';return;}
+  btn.textContent='Signing in...';btn.disabled=true;errEl.textContent='';
+  try{
+    const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+    if(error){
+      errEl.textContent=error.message;
+      btn.textContent='Sign in';btn.disabled=false;
+    } else if(!data?.user){
+      errEl.textContent='Login failed — no user returned. Check Supabase Auth settings.';
+      btn.textContent='Sign in';btn.disabled=false;
+    }
+  } catch(e){
+    errEl.textContent='Connection error: '+e.message;
+    btn.textContent='Sign in';btn.disabled=false;
+  }
+}
+
+async function handleLogout(){
+  if(!confirm('Sign out?'))return;
+  await sb.auth.signOut();
+}
+
+let diary={},today=new Date().toISOString().split('T')[0],editDate=today,saveT=null;
+
+// ── Storage ──────────────────────────────────────
+async function load(){
+  const el=document.getElementById('sav-ind');
+  if(el){el.textContent='Syncing...';el.classList.add('show');}
+
+  // Bug B/C fix: seed from localStorage so any unsynced local edits survive a refresh
+  let localCache={};
+  try{const r=localStorage.getItem(KEY);if(r)localCache=JSON.parse(r)||{};}catch(e){}
+  diary={...localCache};
+  allUsersDiary={};
+
+  try{
+    const {data,error}=await sb.from('diary').select('*');
+    if(!error&&data){
+      const serverDatesForUser=new Set();
+      data.forEach(row=>{
+        if(row.user_id===currentUser?.id){
+          diary[row.date]=row.data;        // server wins for dates present on both
+          serverDatesForUser.add(row.date);
+        }
+        if(isAdmin()&&row.user_id!==currentUser?.id){
+          if(!allUsersDiary[row.user_id])allUsersDiary[row.user_id]={email:row.data?._userEmail||row.user_id,records:{}};
+          allUsersDiary[row.user_id].records[row.date]=row.data;
+        }
+      });
+
+      // Push any local-only dates (edits that never made it to Supabase in a previous session)
+      const localOnly=Object.keys(localCache).filter(d=>!serverDatesForUser.has(d));
+      if(localOnly.length&&currentUser?.id){
+        const rows=localOnly.map(d=>({date:d,user_id:currentUser.id,data:{...localCache[d],_userEmail:currentUser.email}}));
+        sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error:syncErr})=>{
+          if(syncErr)console.warn('Pending-sync error:',syncErr);
+          else console.log('Pushed',localOnly.length,'pending day(s) from local cache to Supabase');
+        });
+      }
+
+      try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+    }
+  } catch(e){console.error('Load error:',e);}
+  if(el)el.classList.remove('show');
+  document.getElementById('sidebar-date').textContent=fmtD(today);
+  renderToday();renderRec();renderSmry();
+}
+
+async function saveNow(){
+  if(diary[editDate]?.locked)return;
+  if(!currentUser?.id){alert('You are not signed in — sign in to save to the cloud.');return;}
+  clearTimeout(saveT);
+  try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+  const btns=document.querySelectorAll('.save-day-btn');
+  btns.forEach(b=>{b.disabled=true;b.textContent='Saving...';});
+  const el=document.getElementById('sav-ind');
+  if(el){el.textContent='Saving...';el.classList.add('show');}
+  try{
+    const {error}=await sb.from('diary').upsert(
+      {date:editDate,user_id:currentUser.id,data:{...(diary[editDate]||{}),_userEmail:currentUser.email}},
+      {onConflict:'date,user_id'}
+    );
+    if(error){
+      console.warn('Save failed:',error);
+      if(el){el.textContent='Save failed — '+(error.message||'unknown');setTimeout(()=>el.classList.remove('show'),3500);}
+      btns.forEach(b=>{b.disabled=false;b.textContent='⚠ Retry save';});
+      alert('Save failed: '+(error.message||'unknown error'));
+    } else {
+      if(el){el.textContent='Saved ✓';setTimeout(()=>el.classList.remove('show'),1800);}
+      btns.forEach(b=>{b.disabled=false;b.textContent='✓ Saved';setTimeout(()=>{b.textContent='💾 Save now';},1500);});
+    }
+  } catch(e){
+    console.warn('Save exception:',e);
+    if(el){el.textContent='Save error';setTimeout(()=>el.classList.remove('show'),2500);}
+    btns.forEach(b=>{b.disabled=false;b.textContent='⚠ Retry save';});
+    alert('Save error: '+(e.message||e));
+  }
+  renderRec();renderSmry();
+}
+
+function save(){
+  const targetDate=editDate;  // Bug A fix: capture at call time so setTimeout writes the right row
+  try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+  const el=document.getElementById('sav-ind');
+  if(el){el.textContent='Saving...';el.classList.add('show');}
+  clearTimeout(saveT);
+  saveT=setTimeout(async()=>{
+    saveT=null;
+    if(!currentUser?.id){
+      if(el){el.textContent='Local only — not signed in';setTimeout(()=>el.classList.remove('show'),1800);}
+      return;
+    }
+    try{
+      const {error}=await sb.from('diary').upsert({date:targetDate,user_id:currentUser.id,data:{...(diary[targetDate]||{}),_userEmail:currentUser.email}},{onConflict:'date,user_id'});
+      if(error)console.warn('Supabase save error:',error);
+      if(el){el.textContent=error?('Sync failed — '+(error.message||'unknown')):'Synced ✓';setTimeout(()=>el.classList.remove('show'),error?3000:1500);}
+    } catch(e){
+      console.warn('Supabase save exception:',e);
+      if(el){el.textContent='Local only ✓';setTimeout(()=>el.classList.remove('show'),1500);}
+    }
+    renderRec();renderSmry();
+  },400);
+}
+
+// ── Navigation ───────────────────────────────────
+function sw(tab){
+  ['today','rec','smry'].forEach(t=>{
+    document.getElementById('nav-'+t).classList.toggle('on',t===tab);
+    document.getElementById('p-'+t).style.display=t===tab?'block':'none';
+  });
+  if(tab==='today'){if(editDate!==today)editDate=today;renderToday();}
+  if(tab==='rec')renderRec();
+  if(tab==='smry')renderSmry();
+}
+
+// ── Day data ─────────────────────────────────────
+function day(date){
+  if(!diary[date])diary[date]={weather:'',conditions:'',plant:[],personnel:[],works:[],completed:[],fuelL:0,standDown:false,notes:'',locked:false};
+  return diary[date];
+}
+function calcCost(date){
+  const d=diary[date]||{};
+  if(d.standDown)return SD_R+(d.fuelL||0)*FUEL_R;
+  let t=0;
+  (d.plant||[]).forEach(p=>t+=(PLANT_RATES[p]||0));
+  (d.personnel||[]).forEach(p=>t+=(PERS_RATES[p]||0));
+  (d.customPlant||[]).forEach(c=>t+=(c.rate||0));
+  (d.customPers||[]).forEach(c=>t+=(c.rate||0));
+  t+=(d.fuelL||0)*FUEL_R;
+  return t;
+}
+
+// ── Formatting ───────────────────────────────────
+function money(n){return'$'+n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fmtD(d){if(!d)return'';const[y,m,dd]=d.split('-');const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${parseInt(dd)} ${M[parseInt(m)-1]} ${y}`;}
+function fmtDShort(d){if(!d)return'';const[y,m,dd]=d.split('-');const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${parseInt(dd)} ${M[parseInt(m)-1]} ${y.slice(2)}`;}
+function wxLabel(k){return WX.find(w=>w.k===k)?.lbl||'Not recorded';}
+function wxEmoji(k){return WX.find(w=>w.k===k)?.e||'🌤';}
+
+// ── Form functions (all use editDate) ────────────
+function addPlant(){
+  if(day(editDate).locked)return;
+  const s=document.getElementById('plant-sel');const v=s?.value;if(!v)return;
+  day(editDate).plant.push(v);save();renderOnSite();
+}
+function removePlant(i){
+  if(day(editDate).locked)return;
+  day(editDate).plant.splice(i,1);save();renderOnSite();
+}
+function addPers(){
+  if(day(editDate).locked)return;
+  const s=document.getElementById('pers-sel');const v=s?.value;if(!v)return;
+  day(editDate).personnel.push(v);save();renderOnSite();
+}
+function removePers(i){
+  if(day(editDate).locked)return;
+  day(editDate).personnel.splice(i,1);save();renderOnSite();
+}
+function setWx(w){
+  if(day(editDate).locked)return;
+  day(editDate).weather=w;save();
+  document.querySelectorAll('.wx-btn').forEach(b=>b.classList.toggle('on',b.dataset.wx===w));
+}
+function setCond(v){if(!day(editDate).locked){day(editDate).conditions=v;save();}}
+
+function addCustomPlant(){
+  if(day(editDate).locked)return;
+  const name=document.getElementById('custom-plant-name')?.value?.trim();
+  const rate=parseFloat(document.getElementById('custom-plant-rate')?.value)||0;
+  if(!name)return;
+  if(!diary[editDate].customPlant)diary[editDate].customPlant=[];
+  diary[editDate].customPlant.push({name,rate});
+  document.getElementById('custom-plant-name').value='';
+  document.getElementById('custom-plant-rate').value='';
+  document.getElementById('custom-plant-row').style.display='none';
+  document.getElementById('plant-sel').value='';
+  save();renderOnSite();
+}
+function removeCustomPlant(i){
+  if(day(editDate).locked)return;
+  diary[editDate].customPlant.splice(i,1);save();renderOnSite();
+}
+function addCustomPers(){
+  if(day(editDate).locked)return;
+  const name=document.getElementById('custom-pers-name')?.value?.trim();
+  const rate=parseFloat(document.getElementById('custom-pers-rate')?.value)||0;
+  if(!name)return;
+  if(!diary[editDate].customPers)diary[editDate].customPers=[];
+  diary[editDate].customPers.push({name,rate});
+  document.getElementById('custom-pers-name').value='';
+  document.getElementById('custom-pers-rate').value='';
+  document.getElementById('custom-pers-row').style.display='none';
+  document.getElementById('pers-sel').value='';
+  save();renderOnSite();
+}
+function removeCustomPers(i){
+  if(day(editDate).locked)return;
+  diary[editDate].customPers.splice(i,1);save();renderOnSite();
+}
+function onPlantSelChange(){
+  const v=document.getElementById('plant-sel')?.value;
+  const row=document.getElementById('custom-plant-row');
+  if(row)row.style.display=v==='__custom__'?'flex':'none';
+}
+function onPersSelChange(){
+  const v=document.getElementById('pers-sel')?.value;
+  const row=document.getElementById('custom-pers-row');
+  if(row)row.style.display=v==='__custom__'?'flex':'none';
+}
+
+function toggleWork(id){
+  if(day(editDate).locked)return;
+  const d=day(editDate);const i=d.works.indexOf(id);
+  if(i===-1)d.works.push(id);else{d.works.splice(i,1);const ci=d.completed.indexOf(id);if(ci!==-1)d.completed.splice(ci,1);}
+  save();renderWorks();
+}
+function toggleDone(id,e){
+  e.stopPropagation();
+  if(day(editDate).locked)return;
+  const d=day(editDate);const i=d.completed.indexOf(id);
+  i===-1?d.completed.push(id):d.completed.splice(i,1);
+  save();renderWorks();
+}
+function setFuel(v){if(!day(editDate).locked){day(editDate).fuelL=parseFloat(v)||0;save();renderOnSite();}}
+function setSD(v){if(!day(editDate).locked){day(editDate).standDown=v;save();renderOnSite();}}
+function setNotes(v){if(!day(editDate).locked){day(editDate).notes=v;save();}}
+
+// ── Lock / Unlock ────────────────────────────────
+function lockDay(date){
+  if(!confirm('Lock '+fmtD(date)+'?\n\nLocked days cannot be edited until unlocked.'))return;
+  day(date).locked=true;
+  // Save locked state directly
+  const prev=editDate;editDate=date;save();editDate=prev;
+  if(date===today)renderToday();
+  else renderEditModal(date);
+  renderRec();
+}
+function unlockDay(date){
+  if(!confirm('Unlock '+fmtD(date)+' for editing?'))return;
+  day(date).locked=false;
+  const prev=editDate;editDate=date;save();editDate=prev;
+  if(date===today)renderToday();
+  else renderEditModal(date);
+  renderRec();
+}
+
+// ── Shared form renderer ──────────────────────────
+function renderOnSite(){
+  const d=day(editDate);const sd=d.standDown;const locked=d.locked;
+  const pl=document.getElementById('plant-list');
+  const pe=document.getElementById('pers-list');
+  const tv=document.getElementById('total-val');
+  const ts=document.getElementById('total-sub');
+  const fc=document.getElementById('fuel-calc');
+  const stdPlant=d.plant.length?d.plant.map((p,i)=>`
+    <div class="on-site-item plant-type${sd?' dimmed':''}">
+      <div><div class="item-info-name">${p}</div><div class="item-info-rate">${money(PLANT_RATES[p]||0)}/day${sd?' — replaced by stand down':''}</div></div>
+      ${locked?'':`<button class="rm-btn" onclick="removePlant(${i})">✕ Remove</button>`}
+    </div>`).join(''):'';
+  const custPlant=(d.customPlant||[]).map((c,i)=>`
+    <div class="on-site-item plant-type${sd?' dimmed':''}" style="border-left-color:#E67E22">
+      <div><div class="item-info-name">${c.name} <span style="font-size:10px;color:#E67E22;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Custom</span></div><div class="item-info-rate">${money(c.rate||0)}/day${sd?' — replaced by stand down':''}</div></div>
+      ${locked?'':`<button class="rm-btn" onclick="removeCustomPlant(${i})">✕ Remove</button>`}
+    </div>`).join('');
+  if(pl)pl.innerHTML=(stdPlant+custPlant)||'<div class="on-site-empty">No plant added yet.</div>';
+  const stdPers=d.personnel.length?d.personnel.map((p,i)=>`
+    <div class="on-site-item pers-type${sd?' dimmed':''}">
+      <div><div class="item-info-name">${p}</div><div class="item-info-rate">${money(PERS_RATES[p]||0)}/day${sd?' — replaced by stand down':''}</div></div>
+      ${locked?'':`<button class="rm-btn" onclick="removePers(${i})">✕ Remove</button>`}
+    </div>`).join(''):'';
+  const custPers=(d.customPers||[]).map((c,i)=>`
+    <div class="on-site-item pers-type${sd?' dimmed':''}" style="border-left-color:#E67E22">
+      <div><div class="item-info-name">${c.name} <span style="font-size:10px;color:#E67E22;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Custom</span></div><div class="item-info-rate">${money(c.rate||0)}/day${sd?' — replaced by stand down':''}</div></div>
+      ${locked?'':`<button class="rm-btn" onclick="removeCustomPers(${i})">✕ Remove</button>`}
+    </div>`).join('');
+  if(pe)pe.innerHTML=(stdPers+custPers)||'<div class="on-site-empty">No personnel added yet.</div>';
+  if(tv)tv.textContent=money(calcCost(editDate));
+  if(ts)ts.textContent=sd?'Stand down rate applied — plant & personnel replaced':'Plant + personnel + fuel';
+  if(fc)fc.textContent=money((d.fuelL||0)*FUEL_R);
+  renderOtherWorks();
+}
+
+
+function addOtherWork(){
+  if(day(editDate).locked)return;
+  const input=document.getElementById('other-work-input');
+  const val=input?.value?.trim();
+  if(!val)return;
+  if(!diary[editDate].otherWorks)diary[editDate].otherWorks=[];
+  diary[editDate].otherWorks.push({text:val,done:false});
+  input.value='';
+  save();renderOtherWorks();
+}
+function toggleOtherDone(i,e){
+  e.stopPropagation();
+  if(day(editDate).locked)return;
+  const w=diary[editDate].otherWorks[i];
+  w.done=!w.done;
+  save();renderOtherWorks();
+}
+function removeOtherWork(i){
+  if(day(editDate).locked)return;
+  diary[editDate].otherWorks.splice(i,1);
+  save();renderOtherWorks();
+}
+function renderOtherWorks(){
+  const el=document.getElementById('other-works-list');if(!el)return;
+  const d=day(editDate);const locked=d.locked;
+  const works=d.otherWorks||[];
+  if(!works.length){el.innerHTML='<div class="on-site-empty">No additional works recorded.</div>';return;}
+  el.innerHTML=works.map((w,i)=>`
+    <div class="work-item sel" style="border-color:var(--amber-border)">
+      <div class="work-cb${w.done?' done':''}" onclick="toggleOtherDone(${i},event)">${w.done?'✓':''}</div>
+      <span class="work-label">${w.text}</span>
+      ${locked?'':`<button class="work-done-btn${w.done?' done':''}" onclick="toggleOtherDone(${i},event)">${w.done?'✓ Done':'Mark done'}</button>
+      <button class="rm-btn" onclick="removeOtherWork(${i})" style="margin-left:4px">✕</button>`}
+    </div>`).join('');
+}
+function renderWorks(){
+  const d=day(editDate);const locked=d.locked;
+  const el=document.getElementById('works-list');if(!el)return;
+  let html='',ls='';
+  FLAT.forEach(({id,label,sec})=>{
+    const sel=d.works.includes(id),done=d.completed.includes(id);
+    if(sec!==ls){html+=`<div class="sec-hdr">${sec}</div>`;ls=sec;}
+    const wClick=locked?'':("toggleWork('"+id+"')");
+    const dClick=locked?'':("toggleDone('"+id+"',event)");
+    html+=`<div class="work-item${sel?' sel':''}" onclick="${wClick}">
+      <div class="work-cb${done?' done':''}">${done?'✓':''}</div>
+      <span class="work-label">${label}</span>
+      ${sel&&!locked?('<button class="work-done-btn'+(done?' done':'')+('" onclick="')+dClick+'">'+(done?'✓ Done':'Mark done')+'</button>'):''}
+      ${sel&&done&&locked?'<span class="locked-badge">✓ Done</span>':''}
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+
+function buildFormHTML(date){
+  const d=day(date);const sd=d.standDown;const locked=d.locked;
+  const wxBtns=WX.map(w=>`<button class="wx-btn${d.weather===w.k?' on':''}" data-wx="${w.k}" onclick="setWx('${w.k}')">${w.e} ${w.lbl}</button>`).join('');
+  const plantOpts=PLANT.map(p=>`<option value="${p}">${p} — ${money(PLANT_RATES[p])}/day</option>`).join('');
+  const persOpts=PERS.map(p=>`<option value="${p}">${p} — ${money(PERS_RATES[p])}/day</option>`).join('');
+  const isToday=date===today;
+  return `
+  ${locked?`<div class="lock-banner">🔒 This day is locked. Data is confirmed and cannot be changed. <button class="unlock-trigger" style="margin-left:auto;font-size:12px;padding:4px 10px;border-radius:4px;border:1px solid var(--green-mid);background:none;color:var(--green);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600" onclick="unlockDay('${date}')">Unlock</button></div>`:''}
+  <div class="card${locked?' form-disabled':''}">
+    <div class="card-title">Weather</div>
+    <div class="wx-row">${wxBtns}</div>
+    <div style="margin-top:14px">
+      <div class="card-title">Site Conditions</div>
+      <input class="text-input" type="text" placeholder="e.g. Dry, good access" value="${d.conditions||''}" onblur="setCond(this.value)">
+    </div>
+  </div>
+  <div class="card${locked?' form-disabled':''}">
+    <div class="card-title">Plant on Site</div>
+    <div id="plant-list"></div>
+    <div class="add-row">
+      <select id="plant-sel" class="add-select"${sd||locked?' disabled':''} onchange="onPlantSelChange()"><option value="" disabled selected>Select plant to add...</option>${plantOpts}<option value="__custom__">+ Add custom plant...</option></select>
+      <button class="add-btn" onclick="document.getElementById('plant-sel')?.value==='__custom__'?addCustomPlant():addPlant()"${sd||locked?' disabled':''}>+ Add</button>
+    </div>
+    <div id="custom-plant-row" style="display:none;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <input id="custom-plant-name" class="text-input" type="text" placeholder="Plant name..." style="flex:2;min-width:140px">
+      <input id="custom-plant-rate" class="fuel-input" type="number" min="0" step="0.01" placeholder="Rate/day">
+      <button class="add-btn" onclick="addCustomPlant()">✓ Add</button>
+    </div>
+    <div class="divider"></div>
+    <div class="card-title">Personnel on Site</div>
+    <div id="pers-list"></div>
+    <div class="add-row">
+      <select id="pers-sel" class="add-select"${sd||locked?' disabled':''} onchange="onPersSelChange()"><option value="" disabled selected>Select personnel to add...</option>${persOpts}<option value="__custom__">+ Add custom personnel...</option></select>
+      <button class="add-btn" onclick="document.getElementById('pers-sel')?.value==='__custom__'?addCustomPers():addPers()"${sd||locked?' disabled':''}>+ Add</button>
+    </div>
+    <div id="custom-pers-row" style="display:none;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <input id="custom-pers-name" class="text-input" type="text" placeholder="Personnel name / role..." style="flex:2;min-width:140px">
+      <input id="custom-pers-rate" class="fuel-input" type="number" min="0" step="0.01" placeholder="Rate/day">
+      <button class="add-btn" onclick="addCustomPers()">✓ Add</button>
+    </div>
+  </div>
+  <div class="card${locked?' form-disabled':''}">
+    <div class="card-title">Works</div>
+    <div class="hint">ℹ Tap a section to record it as worked. Hit <strong>Mark done</strong> only when fully complete.</div>
+    <div class="works-list" id="works-list"></div>
+    <div class="divider"></div>
+    <div class="card-title" style="margin-bottom:10px">Other works (outside scope)</div>
+    <div id="other-works-list"></div>
+    ${locked?'':('<div class="add-row" style="margin-top:8px"><input class="text-input" id="other-work-input" type="text" placeholder="Describe additional work..." style="flex:1"><button class="add-btn" onclick="addOtherWork()" style="white-space:nowrap">+ Add</button></div>')}
+  </div>
+  <div class="card${locked?' form-disabled':''}">
+    <div class="card-title">Fuel & Stand Down</div>
+    <div class="fuel-row">
+      <span class="fuel-label">Fuel used</span>
+      <input class="fuel-input" type="number" min="0" step="10" placeholder="0" value="${d.fuelL||''}" onchange="setFuel(this.value)"${locked?' disabled':''}>
+      <span class="fuel-calc">L × $2.50/L = <span id="fuel-calc">${money((d.fuelL||0)*FUEL_R)}</span></span>
+    </div>
+    <div class="sd-row">
+      <input class="sd-check" type="checkbox" id="sd-cb" ${sd?'checked':''} onchange="setSD(this.checked)"${locked?' disabled':''}>
+      <label for="sd-cb" style="cursor:pointer;font-weight:500">Stand down — applies for the full day</label>
+      <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:13px;color:var(--text-3)">${money(SD_R)}</span>
+    </div>
+    ${sd?`<div class="sd-banner">⚠️ Stand down rate of ${money(SD_R)} applies. Plant and personnel costs are replaced for this day. Fuel still charged.</div>`:''}
+  </div>
+  <div class="card${locked?' form-disabled':''}">
+    <div class="card-title">Notes</div>
+    <textarea class="text-input" placeholder="Site notes, issues, observations..." onblur="setNotes(this.value)"${locked?' disabled':''}>${d.notes||''}</textarea>
+  </div>
+  <div class="total-bar">
+    <div>
+      <div class="total-label">Day Total (ex GST)</div>
+      <div class="total-sub" id="total-sub">${sd?'Stand down rate applied':'Plant + personnel + fuel'}</div>
+    </div>
+    <div class="total-val" id="total-val">${money(calcCost(date))}</div>
+  </div>
+  ${!locked?`<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+    <button class="save-day-btn" onclick="saveNow()">💾 Save now</button>
+    <button class="lock-btn" onclick="lockDay('${date}')">🔒 Lock this day</button>
+  </div>`:''}`;
+}
+
+// ── Today tab ────────────────────────────────────
+
+
+function openDayInToday(date){
+  editDate=date;
+  sw('today');
+}
+function setEditDate(date){
+  if(!date)return;
+  editDate=date;
+  // Mark as today label if it is today
+  const label=document.getElementById('diary-date-label');
+  if(label)label.textContent=date===today?'Today':'Editing';
+  renderToday();
+}
+function renderToday(){
+  if(editDate!==today&&editDate===today)editDate=today;
+  const d=editDate;
+  const locked=day(d).locked;
+  document.getElementById('p-today').innerHTML=`
+  <div class="action-bar">
+    <div class="action-bar-left">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <div class="page-title"><span id="diary-date-label">${d===today?'Today':'Editing'}</span></div>
+          <div class="page-sub">Clarke Creek Wind Farm</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="date" id="diary-date-picker" value="${d}" max="${today}" 
+            style="font-size:14px;padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-family:'Barlow',sans-serif;cursor:pointer"
+            onchange="setEditDate(this.value)">
+          ${d!==today?`<button onclick="setEditDate('${today}')" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1.5px solid var(--border);background:none;cursor:pointer;font-family:'Barlow',sans-serif;color:var(--text-2)">↩ Back to today</button>`:''}
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="save-indicator" id="sav-ind">Synced ✓</span>
+      <button class="view-sheet-btn" onclick="openSheet('${d}')">📄 View Day Sheet</button>
+    </div>
+  </div>
+  ${buildFormHTML(d)}`;
+  renderOnSite();renderWorks();renderOtherWorks();
+}
+
+// ── Edit past day modal ───────────────────────────
+function openEditModal(date){
+  editDate=date;
+  renderEditModal(date);
+  document.getElementById('edit-modal').classList.add('open');
+}
+function renderEditModal(date){
+  const locked=day(date).locked;
+  document.getElementById('edit-modal-title').textContent=`${fmtD(date)}${locked?' 🔒':''}`;
+  document.getElementById('edit-modal-actions').innerHTML=locked
+    ?`<button class="unlock-btn" onclick="unlockDay('${date}')">🔓 Unlock</button>`
+    :`<button class="lock-btn" onclick="lockDay('${date}')">🔒 Lock day</button>
+      <button class="view-sheet-btn" onclick="openSheet('${date}')">📄 Day Sheet</button>`;
+  document.getElementById('edit-modal-body').innerHTML=buildFormHTML(date);
+  renderOnSite();renderWorks();renderOtherWorks();
+}
+function closeEditModal(){
+  document.getElementById('edit-modal').classList.remove('open');
+  editDate=today;
+}
+
+// ── Records tab ──────────────────────────────────
+function renderRec(){
+  const dates=Object.keys(diary).sort().reverse();
+  const el=document.getElementById('p-rec');
+  let run=0;
+  if(!dates.length){el.innerHTML=`<div class="page-title">Records</div><div class="page-sub">No records yet.</div>`;return;}
+  const cards=dates.map(date=>{
+    const d=diary[date]||{};
+    const allP=[...(d.plant||[]),...(d.personnel||[])];
+    const cost=calcCost(date);run+=cost;
+    const isToday=date===today;
+    const locked=d.locked;
+    return`<div class="rec-card${locked?' locked':''}">
+      <div class="rec-hdr">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${wxEmoji(d.weather)}</span>
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="rec-date">${fmtDShort(date)}</span>
+              ${isToday?'<span class="rec-today-badge">TODAY</span>':''}
+              ${locked?'<span class="locked-badge">🔒 Locked</span>':''}
+            </div>
+            <div class="rec-meta">${d.standDown?'Stand down':allP.length?allP.join(', '):'No plant recorded'} · ${(d.completed||[]).length} completed / ${(d.works||[]).length} worked</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <span class="rec-cost">${money(cost)}</span>
+          ${isToday
+            ?`<button class="edit-btn" onclick="sw('today')">✏️ Edit today</button>`
+            :`<button class="edit-btn" onclick="openDayInToday('${date}')">${locked?'👁 View':'✏️ Edit'}</button>`}
+          <button class="sheet-btn" onclick="openSheet('${date}')">📄 Day Sheet</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="page-title">Records</div>
+    <div class="page-sub">All day sheets — ${dates.length} record${dates.length!==1?'s':''}</div>
+    <div class="rec-list">${cards}</div>
+    <div class="project-total-row">
+      <span class="project-total-label">Project total (ex GST)</span>
+      <span class="project-total-val">${money(run)}</span>
+    </div>`;
+}
+
+// ── Summary tab ──────────────────────────────────
+function renderSmry(){
+  const allDates=Object.keys(diary);
+  const totalCost=allDates.reduce((a,d)=>a+calcCost(d),0);
+  const daysOn=allDates.filter(d=>(diary[d].plant||[]).length||(diary[d].personnel||[]).length||diary[d].standDown).length;
+  const sdDays=allDates.filter(d=>diary[d].standDown).length;
+  const completedIds=new Set();
+  allDates.forEach(d=>(diary[d].completed||[]).forEach(id=>completedIds.add(id)));
+  const done=completedIds.size;
+  const plantTotals={};
+  allDates.forEach(date=>{
+    const d=diary[date]||{};if(d.standDown)return;
+    [...(d.plant||[]),...(d.personnel||[])].forEach(p=>{plantTotals[p]=(plantTotals[p]||0)+(ALL_RATES[p]||0);});
+  });
+  const pct=Math.round(done/TOTAL*100);
+  let html=`
+    <div class="page-title">Summary</div>
+    <div class="page-sub">Clarke Creek Wind Farm — Part D Civil Scope</div>
+    <div class="smry-grid">
+      <div class="smry-card"><div class="smry-num">${money(totalCost)}</div><div class="smry-lbl">Running total (ex GST)</div></div>
+      <div class="smry-card"><div class="smry-num">${daysOn}${sdDays?`<span style='font-size:14px;display:block;margin-top:2px'>${sdDays} stand down</span>`:''}</div><div class="smry-lbl">Days on site</div></div>
+      <div class="smry-card"><div class="smry-num">${done}/${TOTAL}</div><div class="smry-lbl">Sections completed</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Scope Progress — ${pct}% complete</div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:14px">${done} of ${TOTAL} sections marked done</div>`;
+  let ls='';
+  const scopeItems=getAllScopeItems();
+  const camIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19V5a2 2 0 0 0-2-2h-3.17l-1.84-2H8.01L6.17 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="4"/></svg>';
+  scopeItems.forEach(s=>{
+    const isDone=completedIds.has(s.id);
+    if(s.sec!==ls){html+=`<div class="sec-hdr">${s.sec}</div>`;ls=s.sec;}
+    const photos=getPhotosForScope(s.id);
+    const safeLabel=s.label.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    html+=`<div class="scope-row">
+      <span class="scope-icon">${isDone?'✅':'⬜'}</span>
+      <span class="${isDone?'scope-done':'scope-pending'}" style="flex:1">${s.label}${s.custom?' <em style="color:var(--text-3);font-style:normal;font-size:10px;letter-spacing:.05em;text-transform:uppercase">custom</em>':''}</span>
+      <button class="scope-photo-btn${photos.length?' has-photos':''}" onclick="openPhotosModal('${s.id}','${safeLabel}')" title="${photos.length?'View '+photos.length+' photo'+(photos.length!==1?'s':''):'Add photo evidence'}">${camIcon}${photos.length?'<span class="scope-photo-count">'+photos.length+'</span>':''}</button>
+      ${s.custom?`<button class="scope-rm-btn" onclick="removeCustomScope('${s.id}')" title="Remove custom scope item">&times;</button>`:''}
+    </div>`;
+  });
+  html+=`<div class="add-custom-scope-row">
+    <input id="custom-scope-label" type="text" placeholder="New scope item label…" onkeydown="if(event.key==='Enter')addCustomScope()">
+    <input id="custom-scope-section" type="text" placeholder="Section (optional)" style="max-width:160px" onkeydown="if(event.key==='Enter')addCustomScope()">
+    <button class="add-btn" onclick="addCustomScope()">+ Add</button>
+  </div>`;
+  html+=`</div>`;
+  if(Object.keys(plantTotals).length){
+    html+=`<div class="card"><div class="card-title">Cost by Item (Productive Days)</div>`;
+    Object.entries(plantTotals).sort((a,b)=>b[1]-a[1]).forEach(([p,t])=>{
+      html+=`<div class="cost-row"><span class="cost-item">${p}</span><span class="cost-val">${money(t)}</span></div>`;
+    });
+    html+=`</div>`;
+  }
+  // Admin: show all other users' summaries
+  if(isAdmin()&&Object.keys(allUsersDiary).length){
+    html+=`<div class="card" style="border-color:var(--amber-border)">
+      <div class="card-title" style="color:var(--amber)">&#x1F512; Admin — All Users</div>`;
+    Object.entries(allUsersDiary).forEach(([uid,{email,records}])=>{
+      const dates=Object.keys(records);
+      const userTotal=dates.reduce((a,d)=>a+calcCostFromRecord(records[d]),0);
+      const userDone=new Set();
+      dates.forEach(d=>(records[d].completed||[]).forEach(id=>userDone.add(id)));
+      html+=`<div style="padding:10px 0;border-bottom:0.5px solid var(--border-light)">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${email}</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px">${dates.length} days · ${userDone.size}/${TOTAL} sections · ${money(userTotal)}</div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+  document.getElementById('p-smry').innerHTML=html;
+}
+
+function calcCostFromRecord(d){
+  if(!d)return 0;
+  if(d.standDown)return SD_R+(d.fuelL||0)*FUEL_R;
+  let t=0;
+  (d.plant||[]).forEach(p=>t+=(PLANT_RATES[p]||0));
+  (d.personnel||[]).forEach(p=>t+=(PERS_RATES[p]||0));
+  (d.customPlant||[]).forEach(c=>t+=(c.rate||0));
+  (d.customPers||[]).forEach(c=>t+=(c.rate||0));
+  t+=(d.fuelL||0)*FUEL_R;
+  return t;
+}
+
+// ── Photo evidence ────────────────────────────────
+let currentPhotoScopeId=null;
+let currentPhotoScopeLabel=null;
+const _signedUrlCache=new Map();
+
+function getAllScopeItems(){
+  const items=FLAT.map(f=>({id:f.id,label:f.label,sec:f.sec,custom:false}));
+  const seen=new Set(items.map(i=>i.id));
+  const addFrom=src=>{
+    Object.keys(src).forEach(date=>{
+      (src[date]?.customScope||[]).forEach(c=>{
+        if(c&&c.id&&!seen.has(c.id)){
+          items.push({id:c.id,label:c.label||'(no label)',sec:c.section||'Custom items',custom:true});
+          seen.add(c.id);
+        }
+      });
+    });
+  };
+  addFrom(diary);
+  if(isAdmin())Object.values(allUsersDiary).forEach(u=>addFrom(u.records||{}));
+  return items;
+}
+
+function getPhotosForScope(scopeId){
+  const out=[];
+  const walk=(src,owner)=>{
+    Object.keys(src).forEach(date=>{
+      const sp=src[date]?.scopePhotos;
+      if(sp&&sp[scopeId])sp[scopeId].forEach(p=>out.push({...p,date,owner}));
+    });
+  };
+  walk(diary,null);
+  if(isAdmin())Object.values(allUsersDiary).forEach(u=>walk(u.records||{},u.email));
+  return out;
+}
+
+function addCustomScope(){
+  const labelEl=document.getElementById('custom-scope-label');
+  const sectionEl=document.getElementById('custom-scope-section');
+  const label=labelEl?.value?.trim();
+  const section=sectionEl?.value?.trim()||'Custom items';
+  if(!label){alert('Enter a name for the scope item');return;}
+  if(!diary[today])day(today);
+  if(!diary[today].customScope)diary[today].customScope=[];
+  const id='c_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  diary[today].customScope.push({id,label,section,added_at:new Date().toISOString()});
+  if(labelEl)labelEl.value='';
+  if(sectionEl)sectionEl.value='';
+  const prev=editDate;editDate=today;save();editDate=prev;
+  renderSmry();
+}
+
+function removeCustomScope(id){
+  if(!confirm('Remove this custom scope item? Photos stay in storage but become unreferenced.'))return;
+  const touched=new Set();
+  Object.keys(diary).forEach(date=>{
+    if(diary[date]?.customScope){
+      const before=diary[date].customScope.length;
+      diary[date].customScope=diary[date].customScope.filter(c=>c.id!==id);
+      if(diary[date].customScope.length!==before)touched.add(date);
+    }
+  });
+  touched.forEach(date=>{const prev=editDate;editDate=date;save();editDate=prev;});
+  renderSmry();
+}
+
+async function resizeImage(file,maxDim=2000,quality=0.85){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const reader=new FileReader();
+    reader.onload=e=>{img.src=e.target.result;};
+    reader.onerror=reject;
+    img.onload=()=>{
+      const ratio=Math.min(maxDim/img.width,maxDim/img.height,1);
+      const w=Math.max(1,Math.round(img.width*ratio));
+      const h=Math.max(1,Math.round(img.height*ratio));
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      canvas.toBlob(blob=>{
+        if(!blob){reject(new Error('Resize failed'));return;}
+        resolve(blob);
+      },'image/jpeg',quality);
+    };
+    img.onerror=()=>reject(new Error('Could not read image'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function getSignedUrl(path){
+  const cached=_signedUrlCache.get(path);
+  if(cached&&cached.expires>Date.now())return cached.url;
+  try{
+    const {data,error}=await sb.storage.from('diary-photos').createSignedUrl(path,3600);
+    if(error){console.warn('Signed URL error:',error);return null;}
+    _signedUrlCache.set(path,{url:data.signedUrl,expires:Date.now()+50*60*1000});
+    return data.signedUrl;
+  }catch(e){console.warn('Signed URL exception:',e);return null;}
+}
+
+async function uploadPhoto(file,scopeId){
+  if(!currentUser?.id){alert('Not signed in');return null;}
+  const overlay=document.getElementById('upload-overlay');
+  const msg=document.getElementById('upload-msg');
+  if(overlay){overlay.classList.add('open');msg.textContent='Preparing '+file.name+'…';}
+  try{
+    const blob=await resizeImage(file);
+    if(msg)msg.textContent='Uploading '+file.name+'…';
+    const uid=currentUser.id;
+    const date=editDate||today;
+    const filename=Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.jpg';
+    const path=uid+'/'+date+'/'+filename;
+    const {error}=await sb.storage.from('diary-photos').upload(path,blob,{contentType:'image/jpeg',cacheControl:'3600'});
+    if(error)throw error;
+    if(!diary[date])day(date);
+    if(!diary[date].scopePhotos)diary[date].scopePhotos={};
+    if(!diary[date].scopePhotos[scopeId])diary[date].scopePhotos[scopeId]=[];
+    const rec={path,name:file.name,caption:'',uploaded_at:new Date().toISOString()};
+    diary[date].scopePhotos[scopeId].push(rec);
+    const prev=editDate;editDate=date;save();editDate=prev;
+    return rec;
+  }catch(e){
+    console.error('Upload failed:',e);
+    alert('Upload failed: '+(e.message||e));
+    return null;
+  }finally{
+    if(overlay)overlay.classList.remove('open');
+  }
+}
+
+async function handlePhotoUpload(event){
+  const files=Array.from(event.target.files||[]);
+  event.target.value='';
+  if(!files.length||!currentPhotoScopeId)return;
+  for(const file of files){
+    if(!file.type.startsWith('image/')){console.warn('Skip non-image:',file.name);continue;}
+    await uploadPhoto(file,currentPhotoScopeId);
+  }
+  await renderPhotoGrid();
+  renderSmry();
+}
+
+async function openPhotosModal(scopeId,label){
+  currentPhotoScopeId=scopeId;
+  currentPhotoScopeLabel=label;
+  document.getElementById('photo-modal-title').textContent=label||'Photos';
+  document.getElementById('photo-modal').classList.add('open');
+  await renderPhotoGrid();
+}
+
+function closePhotoModal(){
+  document.getElementById('photo-modal').classList.remove('open');
+  currentPhotoScopeId=null;
+}
+
+async function renderPhotoGrid(){
+  const body=document.getElementById('photo-modal-body');
+  if(!body||!currentPhotoScopeId)return;
+  const photos=getPhotosForScope(currentPhotoScopeId);
+  if(!photos.length){
+    body.innerHTML='<div class="photo-empty"><div style="font-size:48px;margin-bottom:12px;opacity:.5">📷</div><div style="margin-bottom:16px">No photos for this scope item yet.</div><button class="photo-modal-btn primary" onclick="document.getElementById(\'photo-upload-input\').click()">+ Add the first photo</button></div>';
+    return;
+  }
+  photos.sort((a,b)=>(b.uploaded_at||'').localeCompare(a.uploaded_at||''));
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  body.innerHTML='<div class="photo-grid">'+photos.map(p=>{
+    const encPath=encodeURIComponent(p.path);
+    return '<div class="photo-tile" data-path="'+esc(p.path)+'">'+
+      '<img class="photo-tile-img" data-path="'+esc(p.path)+'" alt="" onclick="openLightbox(\''+encPath+'\')">'+
+      '<div class="photo-tile-meta">'+
+        '<textarea class="photo-tile-caption" placeholder="Add a caption / tag…" onblur="updatePhotoCaption(\''+encPath+'\',this.value)">'+esc(p.caption||'')+'</textarea>'+
+        '<div class="photo-tile-actions"><span>'+fmtDShort(p.date)+(p.owner?' · '+esc(p.owner):'')+'</span>'+
+          '<button class="photo-tile-del" onclick="deletePhoto(\''+encPath+'\')">Delete</button></div>'+
+      '</div></div>';
+  }).join('')+'</div>';
+  for(const p of photos){
+    getSignedUrl(p.path).then(url=>{
+      if(!url)return;
+      body.querySelectorAll('img.photo-tile-img').forEach(img=>{
+        if(img.getAttribute('data-path')===p.path)img.src=url;
+      });
+    });
+  }
+}
+
+async function openLightbox(encPath){
+  const path=decodeURIComponent(encPath);
+  const url=await getSignedUrl(path);
+  if(!url){alert('Could not load image');return;}
+  document.getElementById('photo-lightbox-img').src=url;
+  document.getElementById('photo-lightbox').classList.add('open');
+}
+function closeLightbox(){document.getElementById('photo-lightbox').classList.remove('open');}
+
+function updatePhotoCaption(encPath,caption){
+  const path=decodeURIComponent(encPath);
+  const touched=new Set();
+  Object.keys(diary).forEach(date=>{
+    const sp=diary[date]?.scopePhotos;
+    if(!sp)return;
+    Object.keys(sp).forEach(sid=>{
+      sp[sid].forEach(p=>{if(p.path===path&&p.caption!==caption){p.caption=caption;touched.add(date);}});
+    });
+  });
+  touched.forEach(date=>{const prev=editDate;editDate=date;save();editDate=prev;});
+}
+
+async function deletePhoto(encPath){
+  const path=decodeURIComponent(encPath);
+  if(!confirm('Delete this photo? This cannot be undone.'))return;
+  try{
+    const {error}=await sb.storage.from('diary-photos').remove([path]);
+    if(error)console.warn('Storage delete error:',error);
+  }catch(e){console.warn('Storage delete exception:',e);}
+  _signedUrlCache.delete(path);
+  const touched=new Set();
+  Object.keys(diary).forEach(date=>{
+    const sp=diary[date]?.scopePhotos;
+    if(!sp)return;
+    Object.keys(sp).forEach(sid=>{
+      const before=sp[sid].length;
+      sp[sid]=sp[sid].filter(p=>p.path!==path);
+      if(sp[sid].length!==before)touched.add(date);
+    });
+  });
+  touched.forEach(date=>{const prev=editDate;editDate=date;save();editDate=prev;});
+  await renderPhotoGrid();
+  renderSmry();
+}
+
+// ── Day Sheet ────────────────────────────────────
+let currentSheetDate=null;
+function openSheet(date){
+  currentSheetDate=date;
+  const d=diary[date]||{};const sd=d.standDown;
+  const allPlant=d.plant||[];const allPers=d.personnel||[];
+  const workedItems=FLAT.filter(s=>(d.works||[]).includes(s.id));
+  document.getElementById('sheet-modal-title').textContent=`Day Sheet — ${fmtD(date)}`;
+  let plantRows='',plantTotal=0;
+  if(sd){
+    plantRows=`<tr><td colspan="2" style="color:var(--text-3);font-style:italic">Stand down — plant & personnel costs replaced</td><td class="mono">${money(SD_R)}</td></tr>`;
+    plantTotal=SD_R;
+  } else {
+    allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantTotal+=r;plantRows+=`<tr><td>${p}</td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(r)}/day</td><td class="mono">${money(r)}</td></tr>`;});
+    allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantTotal+=r;plantRows+=`<tr><td>${p}</td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(r)}/day</td><td class="mono">${money(r)}</td></tr>`;});
+    (d.customPlant||[]).forEach(c=>{plantTotal+=c.rate||0;plantRows+=`<tr><td>${c.name} <em style="color:#E67E22;font-size:11px">custom</em></td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(c.rate||0)}/day</td><td class="mono">${money(c.rate||0)}</td></tr>`;});
+    (d.customPers||[]).forEach(c=>{plantTotal+=c.rate||0;plantRows+=`<tr><td>${c.name} <em style="color:#E67E22;font-size:11px">custom</em></td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(c.rate||0)}/day</td><td class="mono">${money(c.rate||0)}</td></tr>`;});
+    if(!allPlant.length&&!allPers.length&&!(d.customPlant||[]).length&&!(d.customPers||[]).length)plantRows=`<tr><td colspan="3" style="color:var(--text-3);font-style:italic">No plant or personnel recorded</td></tr>`;
+  }
+  const fuelAmt=(d.fuelL||0)*FUEL_R;
+  const fuelRow=fuelAmt>0?`<tr><td>Fuel (${d.fuelL}L × $2.50/L)</td><td></td><td class="mono">${money(fuelAmt)}</td></tr>`:'';
+  const bySec={};
+  workedItems.forEach(s=>{if(!bySec[s.sec])bySec[s.sec]=[];bySec[s.sec].push(s);});
+  let worksHtml='';
+  if(Object.keys(bySec).length){
+    Object.entries(bySec).forEach(([sec,items])=>{
+      worksHtml+=`<div class="doc-sec-sub">${sec}</div>`;
+      items.forEach(s=>{
+        const done=(d.completed||[]).includes(s.id);
+        worksHtml+=`<div class="doc-works-item"><span style="flex:1;color:var(--text-2)">${s.label}</span><span class="doc-badge ${done?'badge-done':'badge-prog'}">${done?'Completed':'In Progress'}</span></div>`;
+      });
+    });
+  } else worksHtml=`<div class="no-works">No works recorded for this day.</div>`;
+  document.getElementById('sheet-doc').innerHTML=`
+  <div class="doc-header">
+    <div class="doc-logo-block">
+      <div class="doc-label">Civil Works Day Sheet</div>
+      <div class="doc-title">Clarke Creek<br>Wind Farm</div>
+      <div class="doc-sub">Part D — Civil Scope of Works</div>
+    </div>
+    <div class="doc-meta-block">
+      <div class="doc-date">${fmtDShort(date)}</div>
+      <div class="doc-meta-grid">
+        <span class="doc-meta-label">Weather</span><span class="doc-meta-val">${wxEmoji(d.weather)} ${wxLabel(d.weather)}</span>
+        <span class="doc-meta-label">Conditions</span><span class="doc-meta-val">${d.conditions||'Not recorded'}</span>
+      </div>
+    </div>
+  </div>
+  <div class="doc-section">
+    <div class="doc-section-title">Plant & Personnel on Site</div>
+    <table class="doc-table">
+      <thead><tr><th>Item</th><th>Rate</th><th>Amount</th></tr></thead>
+      <tbody>${plantRows}${fuelRow}</tbody>
+      <tfoot><tr><td colspan="2" style="font-family:'Barlow Condensed',sans-serif;font-size:13px">Subtotal</td><td class="mono">${money(plantTotal+fuelAmt)}</td></tr></tfoot>
+    </table>
+  </div>
+  <div class="doc-section">
+    <div class="doc-section-title">Works Undertaken</div>
+    ${worksHtml}
+    ${(d.otherWorks||[]).length?('<div class="doc-sec-sub" style="margin-top:10px">Other works (outside scope)</div>'+(d.otherWorks.map(w=>'<div class="doc-works-item"><span style="flex:1;color:var(--text-2)">'+w.text+'</span><span class="doc-badge '+(w.done?'badge-done':'badge-prog')+'">'+(w.done?'Completed':'In Progress')+'</span></div>').join(''))):''}
+  </div>
+  ${d.notes?`<div class="doc-section"><div class="doc-section-title">Notes</div><div class="doc-notes">${d.notes}</div></div>`:''}
+  <div class="doc-total">
+    <div class="doc-total-label">Day Total (ex GST)</div>
+    <div class="doc-total-val">${money(calcCost(date))}</div>
+  </div>
+  <div class="doc-footer">
+    <span>Clarke Creek Wind Farm — Civil Works Day Sheet${d.locked?' 🔒 Locked':''}</span>
+    <span>Generated ${fmtD(today)}</span>
+  </div>`;
+  document.getElementById('sheet-modal').classList.add('open');
+}
+function closeSheet(){document.getElementById('sheet-modal').classList.remove('open');}
+
+// ── Export / Import ──────────────────────────────
+function exportData(){
+  const data={diary:diary,exported:new Date().toISOString(),version:'ccwf_v1'};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='CCWF_Diary_Backup_'+today+'.json';a.click();URL.revokeObjectURL(url);
+}
+function importData(event){
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.diary)throw new Error('Invalid backup file');
+      const count=Object.keys(data.diary).length;
+      if(!confirm('Import '+count+' day record(s) from backup?\n\nExisting days will be overwritten if there is a conflict.'))return;
+      diary={...diary,...data.diary};
+      localStorage.setItem(KEY,JSON.stringify(diary));
+      try{
+        if(currentUser?.id){
+          const rows=Object.entries(diary).map(([date,d])=>({date,user_id:currentUser.id,data:{...d,_userEmail:currentUser.email}}));
+          const {error}=await sb.from('diary').upsert(rows,{onConflict:'date,user_id'});
+          if(error)console.warn('Import sync error:',error);
+        }
+      }catch(e){console.warn('Import sync error:',e);}
+      renderToday();renderRec();renderSmry();
+      alert('Import successful — '+count+' records loaded and synced.');
+    }catch(err){alert('Import failed: '+err.message);}
+    event.target.value='';
+  };
+  reader.readAsText(file);
+}
+
+// ── PDF generation ───────────────────────────────
+async function generatePDF(){
+  const btn=document.getElementById('pdf-btn');
+  btn.textContent='Generating...';btn.disabled=true;
+  try{
+    const date=currentSheetDate;
+    const d=diary[date]||{};const sd=d.standDown;
+
+    // Pre-fetch any photos for this day so we can embed them
+    const photoBundles=[];
+    if(d.scopePhotos){
+      const scopeLookup={};
+      FLAT.forEach(f=>{scopeLookup[f.id]={label:f.label,sec:f.sec};});
+      (d.customScope||[]).forEach(c=>{scopeLookup[c.id]={label:c.label,sec:c.section||'Custom items'};});
+      btn.textContent='Fetching photos...';
+      for(const [sid,arr] of Object.entries(d.scopePhotos)){
+        if(!arr||!arr.length)continue;
+        const info=scopeLookup[sid]||{label:'(unknown scope)',sec:''};
+        const photos=[];
+        for(const p of arr){
+          try{
+            const url=await getSignedUrl(p.path);
+            if(!url)continue;
+            const res=await fetch(url);
+            if(!res.ok)continue;
+            const blob=await res.blob();
+            const dataUrl=await new Promise((r,j)=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=j;fr.readAsDataURL(blob);});
+            photos.push({...p,dataUrl});
+          }catch(e){console.warn('Photo fetch error:',p.path,e);}
+        }
+        if(photos.length)photoBundles.push({label:info.label,section:info.sec,photos});
+      }
+      btn.textContent='Generating...';
+    }
+
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,ml=20,mr=20,cw=W-ml-mr;
+    let y=20;
+    const green=[31,92,46],greenMid=[46,125,62],grey=[100,100,100],lightGrey=[180,180,180],black=[26,26,26];
+    function ln(x1,y1,x2,y2,color=[220,220,215],lw=0.3){doc.setDrawColor(...color);doc.setLineWidth(lw);doc.line(x1,y1,x2,y2);}
+    function rct(x,rx,rw,rh,color){doc.setFillColor(...color);doc.rect(x,rx,rw,rh,'F');}
+    rct(0,0,W,42,green);
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
+    doc.text('CIVIL WORKS DAY SHEET',ml,14);
+    doc.setFontSize(18);doc.text('Clarke Creek Wind Farm',ml,24);
+    doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(200,230,205);
+    doc.text('Part D — Civil Scope of Works',ml,31);
+    doc.setFontSize(18);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
+    doc.text(fmtDShort(date),W-mr,24,{align:'right'});
+    doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(200,230,205);
+    doc.text(`Weather: ${wxLabel(d.weather)}`,W-mr,31,{align:'right'});
+    if(d.conditions)doc.text(d.conditions.length>40?d.conditions.slice(0,40)+'…':d.conditions,W-mr,36,{align:'right'});
+    y=52;
+    function secTitle(title){
+      rct(ml,y,cw,6,greenMid);
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
+      doc.text(title.toUpperCase(),ml+3,y+4);
+      y+=10;doc.setTextColor(...black);
+    }
+    secTitle('Plant & Personnel on Site');
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...grey);
+    doc.text('ITEM',ml,y);doc.text('RATE',ml+100,y);doc.text('AMOUNT',W-mr,y,{align:'right'});
+    y+=4;ln(ml,y,W-mr,y,[200,200,200]);y+=4;
+    const allPlant=d.plant||[];const allPers=d.personnel||[];let plantSubtotal=0;
+    doc.setFont('helvetica','normal');doc.setTextColor(...black);
+    if(sd){
+      doc.setFontSize(9);doc.text('Stand down — plant & personnel costs replaced',ml,y);
+      doc.text(money(SD_R),W-mr,y,{align:'right'});plantSubtotal=SD_R;y+=7;
+    } else {
+      allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantSubtotal+=r;doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantSubtotal+=r;doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      if(!allPlant.length&&!allPers.length){doc.setTextColor(...grey);doc.setFontSize(9);doc.text('No plant or personnel recorded',ml,y);y+=7;doc.setTextColor(...black);}
+    }
+    const fuelAmt=(d.fuelL||0)*FUEL_R;
+    if(fuelAmt>0){doc.setFontSize(9);doc.text(`Fuel (${d.fuelL}L × $2.50/L)`,ml,y);doc.text(money(fuelAmt),W-mr,y,{align:'right'});y+=7;}
+    ln(ml+80,y,W-mr,y);y+=4;
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Subtotal',ml+80,y);doc.text(money(plantSubtotal+fuelAmt),W-mr,y,{align:'right'});y+=12;
+    secTitle('Works Undertaken');
+    const workedItems=FLAT.filter(s=>(d.works||[]).includes(s.id));
+    if(workedItems.length){
+      const bySec={};workedItems.forEach(s=>{if(!bySec[s.sec])bySec[s.sec]=[];bySec[s.sec].push(s);});
+      Object.entries(bySec).forEach(([sec,items])=>{
+        doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...grey);doc.text(sec.toUpperCase(),ml,y);y+=5;
+        items.forEach(s=>{
+          const done=(d.completed||[]).includes(s.id);
+          doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
+          doc.text(done?'✓':'•',ml+2,y);doc.text(s.label,ml+8,y);
+          doc.setFont('helvetica','bold');
+          if(done){doc.setTextColor(46,125,62);}else{doc.setTextColor(123,94,0);}
+          doc.text(done?'COMPLETED':'IN PROGRESS',W-mr,y,{align:'right'});
+          doc.setTextColor(...black);y+=6;
+        });y+=2;
+      });
+    } else {doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...grey);doc.text('No works recorded.',ml,y);y+=8;}
+    y+=4;
+    if(d.notes){
+      secTitle('Notes');
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
+      const lines=doc.splitTextToSize(d.notes,cw-6);
+      rct(ml,y-3,cw,lines.length*5+6,[245,244,240]);
+      doc.text(lines,ml+4,y+1);y+=lines.length*5+10;
+    }
+    y+=4;rct(ml,y,cw,14,green);
+    doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(255,255,255);
+    doc.text('DAY TOTAL (EX GST)',ml+4,y+9);doc.setFontSize(14);doc.text(money(calcCost(date)),W-mr,y+9,{align:'right'});y+=22;
+    ln(ml,y,W-mr,y);y+=4;
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...lightGrey);
+    doc.text(`Clarke Creek Wind Farm — Civil Works Day Sheet${d.locked?' — LOCKED':''}`,ml,y);
+    doc.text(`Generated ${fmtD(today)}`,W-mr,y,{align:'right'});
+
+    // Photo Evidence section
+    if(photoBundles.length){
+      doc.addPage();y=20;
+      secTitle('Photo Evidence');
+      const thumbW=55,thumbH=42,gap=5;
+      const cols=Math.floor((cw+gap)/(thumbW+gap));
+      for(const bundle of photoBundles){
+        if(y+18>277){doc.addPage();y=20;}
+        doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...black);
+        const labelLines=doc.splitTextToSize(bundle.label,cw);
+        doc.text(labelLines,ml,y);y+=labelLines.length*5;
+        doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...grey);
+        doc.text(bundle.section.toUpperCase(),ml,y);y+=4;
+        let col=0;let rowTop=y;
+        for(const photo of bundle.photos){
+          if(col>=cols){col=0;y=rowTop+thumbH+10;rowTop=y;}
+          if(y+thumbH+10>277){doc.addPage();y=20;rowTop=y;col=0;}
+          const x=ml+col*(thumbW+gap);
+          try{
+            doc.addImage(photo.dataUrl,'JPEG',x,y,thumbW,thumbH,undefined,'FAST');
+          }catch(e){console.warn('addImage error:',e);}
+          if(photo.caption){
+            doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...black);
+            const cap=photo.caption.length>40?photo.caption.slice(0,40)+'…':photo.caption;
+            doc.text(cap,x,y+thumbH+3);
+          }
+          col++;
+        }
+        y=rowTop+thumbH+12;
+      }
+    }
+
+    doc.save(`CCWF_Day_Sheet_${date}.pdf`);
+  }catch(err){console.error(err);alert('PDF generation failed: '+err.message);}
+  btn.textContent='⬇ Download PDF';btn.disabled=false;
+}
+
+// Bug D fix: detect date rollover (e.g. tab left open past midnight)
+setInterval(()=>{
+  const now=new Date().toISOString().split('T')[0];
+  if(now===today)return;
+  console.log('Date rolled over from',today,'to',now);
+  const wasOnToday=editDate===today;
+  today=now;
+  if(wasOnToday)editDate=today;
+  const sd=document.getElementById('sidebar-date');if(sd)sd.textContent=fmtD(today);
+  if(document.getElementById('nav-today')?.classList.contains('on'))renderToday();
+  renderRec();renderSmry();
+},60000);
+
+// Bug E fix: cross-tab sync — when another tab updates localStorage, merge into this tab's diary
+window.addEventListener('storage',e=>{
+  if(e.key!==KEY||!e.newValue)return;
+  try{
+    const updated=JSON.parse(e.newValue);
+    if(!updated||typeof updated!=='object')return;
+    diary={...diary,...updated};
+    if(document.getElementById('nav-today')?.classList.contains('on'))renderToday();
+    if(document.getElementById('nav-rec')?.classList.contains('on'))renderRec();
+    if(document.getElementById('nav-smry')?.classList.contains('on'))renderSmry();
+  }catch(err){console.warn('Cross-tab sync error:',err);}
+});
+
+if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initAuth);}else{initAuth();}
+</script>
+</body>
+</html>
