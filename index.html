@@ -812,8 +812,29 @@ async function load(){
   if(el)el.classList.remove('show');
   loadPlantConfig();
   Object.keys(diary).forEach(d=>migrateDayRecord(diary[d]));
+  autoLockPastDays();
   document.getElementById('sidebar-date').textContent=fmtD(today);
   renderToday();renderRec();renderSmry();
+}
+
+// Auto-lock every past day (date<today) that's currently unlocked. Runs on load.
+// Users can still hit Unlock on a past day to edit it; the next load will re-lock,
+// which is intentional — locking is the safe default for the historical record.
+function autoLockPastDays(){
+  if(!currentUser?.id)return;
+  const rows=[];
+  Object.keys(diary).forEach(date=>{
+    if(date<today && diary[date] && !diary[date].locked){
+      diary[date].locked=true;
+      rows.push({date,user_id:currentUser.id,data:{...diary[date],_userEmail:currentUser.email}});
+    }
+  });
+  if(!rows.length)return;
+  try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+  sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error})=>{
+    if(error)console.warn('Auto-lock sync error:',error);
+    else console.log('Auto-locked',rows.length,'past day(s)');
+  });
 }
 
 async function saveNow(){
