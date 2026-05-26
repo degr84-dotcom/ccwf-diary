@@ -697,27 +697,44 @@ function isAdmin(){return currentUser?.email==='degen.runge@squadronenergy.com';
 
 // ── Auth ─────────────────────────────────────────
 let authReady=false;
-async function initAuth(){
-  // Register listener FIRST so SIGNED_IN events fired during sign-in are never missed.
-  sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='SIGNED_IN'){
-      if(currentUser?.id===session?.user?.id&&authReady)return;  // de-dupe with handleLogin path
-      currentUser=session.user;showApp();await load();
-    }
-    else if(event==='SIGNED_OUT'){currentUser=null;diary={};allUsersDiary={};showLogin();}
-  });
+let authResolving=false;  // true while a getSession() is in flight; prevents overlapping retries
+async function tryRestoreSession(timeoutMs){
+  if(authResolving||authReady)return;
+  authResolving=true;
   try{
-    const timeout=new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),20000));
+    const timeout=new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),timeoutMs||60000));
     const {data:{session}}=await Promise.race([sb.auth.getSession(),timeout]);
     if(session){currentUser=session.user;authReady=true;showApp();await load();}
     else showLogin();
   }catch(e){
-    console.error('Auth init error:',e);
-    showLogin();
-    if(e.message==='timeout'){
-      document.getElementById('login-error').textContent='Connection timed out — sign in below to continue.';
+    console.warn('tryRestoreSession:',e.message||e);
+    // Only show login overlay if we don't already have a session — keeps current UI if user was signed in
+    if(!authReady){
+      showLogin();
+      const errEl=document.getElementById('login-error');
+      if(errEl&&e.message==='timeout')errEl.textContent='Network is slow — sign in to continue or wait while we reconnect.';
     }
+  }finally{
+    authResolving=false;
   }
+}
+async function initAuth(){
+  // Register listener FIRST so SIGNED_IN/TOKEN_REFRESHED events fired during retry are never missed.
+  sb.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN'||event==='TOKEN_REFRESHED'){
+      if(!session)return;
+      if(currentUser?.id===session.user.id&&authReady)return;  // de-dupe
+      currentUser=session.user;authReady=true;showApp();await load();
+    }
+    else if(event==='SIGNED_OUT'){currentUser=null;authReady=false;diary={};allUsersDiary={};showLogin();}
+  });
+  // Generous 60s timeout — wake-from-sleep refresh can take >20s on slow networks
+  await tryRestoreSession(60000);
+
+  // Auto-retry session restore when network comes back or tab becomes visible.
+  // This is the wake-from-sleep / reconnect path that previously kicked users to login.
+  window.addEventListener('online',()=>{if(!authReady)tryRestoreSession(30000);});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!authReady)tryRestoreSession(30000);});
 }
 
 function showLogin(){
