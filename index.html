@@ -1451,7 +1451,14 @@ function renderSmry(){
     (diary[dt].powerlineItems||[]).forEach(function(w){plTotal++;if(w.done)plDone++;});
   });
   var plantTotals={};
-  allDates.forEach(function(date){var d=diary[date]||{};if(d.standDown)return;(d.plant||[]).forEach(function(p){plantTotals[p]=(plantTotals[p]||0)+getRate(p);});(d.personnel||[]).forEach(function(p){plantTotals[p]=(plantTotals[p]||0)+getRate(p);});(d.customPlant||[]).forEach(function(c){plantTotals[c.name]=(plantTotals[c.name]||0)+getRate(c.name);});(d.customPers||[]).forEach(function(c){plantTotals[c.name]=(plantTotals[c.name]||0)+getRate(c.name);});});
+  allDates.forEach(function(date){
+    var d=diary[date]||{};if(d.standDown)return;
+    (d.plant||[]).forEach(function(p){plantTotals[p]=(plantTotals[p]||0)+getRate(p);});
+    (d.personnel||[]).forEach(function(p){plantTotals[p]=(plantTotals[p]||0)+getRate(p);});
+    // Custom items: use the per-day stored rate (with override fallback) so summary matches the day total
+    (d.customPlant||[]).forEach(function(c){var r=plantConfig.plantOverrides[c.name]??c.rate??getRate(c.name);plantTotals[c.name]=(plantTotals[c.name]||0)+r;});
+    (d.customPers||[]).forEach(function(c){var r=plantConfig.persOverrides[c.name]??c.rate??getRate(c.name);plantTotals[c.name]=(plantTotals[c.name]||0)+r;});
+  });
   var byMonth={};allDates.forEach(function(date){var k=date.slice(0,7);if(!byMonth[k])byMonth[k]=[];byMonth[k].push(date);});
   var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var html='';
