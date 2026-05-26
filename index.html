@@ -786,7 +786,10 @@ async function handleLogout(){
   await sb.auth.signOut();
 }
 
-let diary={},today=new Date().toISOString().split('T')[0],editDate=today,saveT=null;
+// Local-time date string (YYYY-MM-DD). toISOString() returns UTC, which made "today"
+// wrong for AEST users for ~10 hours after midnight local — see localDateStr usage below.
+function localDateStr(d){d=d||new Date();var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,'0');var day=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+day;}
+let diary={},today=localDateStr(),editDate=today,saveT=null;
 
 // ── Storage ──────────────────────────────────────
 async function load(){
@@ -1546,7 +1549,7 @@ function renderSmry(){
   updateRangeTotal();
 }
 function toggleMonth(key){var b=document.getElementById('mb-'+key);var c=document.getElementById('chev-'+key);if(!b)return;var o=b.style.display==='none';b.style.display=o?'block':'none';if(c)c.textContent=o?'▾':'▸';}
-function setPreset(p){var now=new Date();var from,to=today;if(p==='tw'){var d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);from=d.toISOString().split('T')[0];}else if(p==='lw'){var d=new Date(now);d.setDate(d.getDate()-d.getDay()-6);from=d.toISOString().split('T')[0];var e=new Date(now);e.setDate(e.getDate()-e.getDay());to=e.toISOString().split('T')[0];}else if(p==='tm'){from=today.slice(0,7)+'-01';}else if(p==='lm'){var d=new Date(now.getFullYear(),now.getMonth()-1,1);from=d.toISOString().split('T')[0];var e=new Date(now.getFullYear(),now.getMonth(),0);to=e.toISOString().split('T')[0];}else{var d=Object.keys(diary).sort();from=d[0]||today;}var fi=document.getElementById('range-from');var ti=document.getElementById('range-to');if(fi)fi.value=from;if(ti)ti.value=to;updateRangeTotal();}
+function setPreset(p){var now=new Date();var from,to=today;if(p==='tw'){var d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);from=localDateStr(d);}else if(p==='lw'){var d=new Date(now);d.setDate(d.getDate()-d.getDay()-6);from=localDateStr(d);var e=new Date(now);e.setDate(e.getDate()-e.getDay());to=localDateStr(e);}else if(p==='tm'){from=today.slice(0,7)+'-01';}else if(p==='lm'){var d=new Date(now.getFullYear(),now.getMonth()-1,1);from=localDateStr(d);var e=new Date(now.getFullYear(),now.getMonth(),0);to=localDateStr(e);}else{var d=Object.keys(diary).sort();from=d[0]||today;}var fi=document.getElementById('range-from');var ti=document.getElementById('range-to');if(fi)fi.value=from;if(ti)ti.value=to;updateRangeTotal();}
 function updateRangeTotal(){var from=document.getElementById('range-from')?.value;var to=document.getElementById('range-to')?.value;if(!from||!to)return;var dates=Object.keys(diary).filter(function(d){return d>=from&&d<=to;});var t=dates.reduce(function(a,d){return a+calcCost(d);},0);var el=document.getElementById('range-total');var dl=document.getElementById('range-days-label');if(el)el.textContent=money(t);if(dl)dl.textContent=dates.length+' day'+(dates.length!==1?'s':'')+' in range';}
 
 function calcCostFromRecord(d){
@@ -2060,9 +2063,9 @@ async function generatePDF(){
   btn.textContent='⬇ Download PDF';btn.disabled=false;
 }
 
-// Bug D fix: detect date rollover (e.g. tab left open past midnight)
+// Bug D fix: detect date rollover (e.g. tab left open past midnight) — uses LOCAL time
 setInterval(()=>{
-  const now=new Date().toISOString().split('T')[0];
+  const now=localDateStr();
   if(now===today)return;
   console.log('Date rolled over from',today,'to',now);
   const wasOnToday=editDate===today;
