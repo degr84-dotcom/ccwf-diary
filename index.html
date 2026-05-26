@@ -151,7 +151,7 @@ textarea.text-input{resize:vertical;min-height:80px}
 .project-total-label{font-size:13px;color:var(--text-3);font-weight:500}
 .project-total-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--green)}
 /* Summary */
-.smry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
+.smry-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px}
 .smry-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);text-align:center}
 .smry-num{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--green)}
 .smry-lbl{font-size:11px;color:var(--text-3);margin-top:4px;font-weight:500;text-transform:uppercase;letter-spacing:.05em}
@@ -257,7 +257,7 @@ textarea.text-input{resize:vertical;min-height:80px}
   .app{grid-template-columns:200px 1fr}
   .sidebar-project{font-size:16px}
   .main{padding:24px 28px}
-  .smry-grid{grid-template-columns:repeat(3,1fr);gap:12px}
+  .smry-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 }
 
 /* ── Mobile + Tablet portrait (≤900px) ── stacked layout, touch sizes */
@@ -1518,7 +1518,6 @@ function renderSmry(){
   html+='<div class="smry-grid">';
   html+='<div class="smry-card"><div class="smry-num">'+money(totalCost)+'</div><div class="smry-lbl">All time (ex GST)</div></div>';
   html+='<div class="smry-card"><div class="smry-num">'+daysOn+(sdDays?'<div style="font-size:12px;margin-top:2px">'+sdDays+' stand down</div>':'')+'</div><div class="smry-lbl">Days on site</div></div>';
-  html+='<div class="smry-card"><div class="smry-num">'+doneWI+'/'+totalWI+'</div><div class="smry-lbl">Work items done</div></div>';
   html+='</div>';
   html+='<div class="card" style="margin-bottom:16px"><div class="card-title" style="margin-bottom:12px">Cost for period</div>';
   html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
