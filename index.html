@@ -35,7 +35,8 @@
   --radius-sm:5px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+html,body{overflow-x:hidden;max-width:100vw}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;-webkit-text-size-adjust:100%}
 /* Layout */
 .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
 .sidebar{background:var(--green);padding:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
@@ -250,14 +251,16 @@ textarea.text-input{resize:vertical;min-height:80px}
 /* ── Responsive / Mobile ─────────────────────────── */
 
 /* ── Tablet (769–1024px) ── */
-@media (max-width:1024px) and (min-width:769px){
-  .app{grid-template-columns:180px 1fr}
-  .sidebar-project{font-size:15px}
+/* ── Tablet landscape (901–1280px) ── narrower sidebar, tighter padding */
+@media (max-width:1280px) and (min-width:901px){
+  .app{grid-template-columns:200px 1fr}
+  .sidebar-project{font-size:16px}
   .main{padding:24px 28px}
+  .smry-grid{grid-template-columns:repeat(3,1fr);gap:12px}
 }
 
-/* ── Mobile (≤768px) ── */
-@media (max-width:768px){
+/* ── Mobile + Tablet portrait (≤900px) ── stacked layout, touch sizes */
+@media (max-width:900px){
   /* Layout */
   .app{display:flex;flex-direction:column;min-height:100vh;min-height:-webkit-fill-available}
   .main{padding:16px 14px;padding-bottom:90px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -352,19 +355,54 @@ textarea.text-input{resize:vertical;min-height:80px}
   .photo-modal-bar{gap:6px}
   .photo-modal-btn{min-height:40px;font-size:13px;padding:8px 12px}
   .photo-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+
+  /* Day sheet doc tables — prevent horizontal overflow on narrow screens */
+  .sheet-doc{max-width:100%;width:100%}
+  .doc-section{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .doc-table{font-size:11px;min-width:0}
+  .doc-table th{font-size:9px;padding:4px 5px;letter-spacing:.04em}
+  .doc-table td{padding:6px 5px;word-break:break-word}
+  .doc-table td.mono{font-size:10px}
+
+  /* Records list — keep cost + buttons inside the card */
+  .rec-card{min-width:0;overflow:hidden}
+  .rec-meta{min-width:0;word-break:break-word}
+  .rec-cost{font-size:13px}
+
+  /* Action bar PDF/lock buttons row */
+  .action-bar>*{min-width:0}
+
+  /* Small but tappable destructive buttons */
+  .rm-btn{min-height:40px}
 }
 
 /* ── Small phone (≤480px) ── */
 @media (max-width:480px){
   .smry-grid{grid-template-columns:1fr}
   .smry-num{font-size:20px}
-  .wx-btn{font-size:12px;padding:8px 8px}
+  .wx-btn{font-size:12px;padding:8px 8px;flex:1 1 calc(50% - 6px);min-height:44px}
   .page-title{font-size:20px}
   .total-val{font-size:22px}
   .doc-title{font-size:20px}
-  .main{padding:12px 12px;padding-bottom:90px}
+  .main{padding:12px 12px;padding-bottom:96px}
   .card{padding:12px}
   .rec-hdr{padding:10px 12px}
+  .rec-date{min-width:0;width:100%}
+  .rec-today-badge{margin-left:0}
+  .rec-cost{font-size:12px}
+
+  /* Bottom nav fits 4–5 items on a 360px phone */
+  .nav-item{font-size:9px;padding:6px 2px 8px;min-height:52px;gap:1px}
+  .nav-icon{font-size:20px}
+
+  /* Day sheet doc even tighter */
+  .sheet-modal .sheet-scroll{padding:10px 8px 110px}
+  .doc-table{font-size:10px}
+  .doc-table th{font-size:8px;padding:3px 3px}
+  .doc-table td{padding:5px 3px}
+
+  /* Login overlay padding eats less screen on tiny phones */
+  #login-overlay>div{padding:28px 22px !important}
 }
 .preset-btn{font-size:12px;padding:5px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:none;cursor:pointer;font-family:'Barlow',sans-serif;color:var(--text-2);font-weight:500;transition:all .15s}
 .preset-btn:hover{border-color:var(--green-mid);color:var(--green);background:var(--green-light)}
@@ -380,10 +418,10 @@ textarea.text-input{resize:vertical;min-height:80px}
       <div style="font-size:28px;font-weight:700;color:var(--green);font-family:'Barlow Condensed',sans-serif;line-height:1.1">Clarke Creek<br>Wind Farm</div>
       <div style="font-size:13px;color:var(--text-3);margin-top:8px">Sign in to continue</div>
     </div>
-    <input id="login-email" type="email" placeholder="Email address" style="width:100%;font-size:14px;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);margin-bottom:10px;font-family:'Barlow',sans-serif;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
-    <input id="login-password" type="password" placeholder="Password" style="width:100%;font-size:14px;padding:10px 14px;border-radius:6px;border:1.5px solid var(--border);margin-bottom:6px;font-family:'Barlow',sans-serif;outline:none" onkeydown="if(event.key==='Enter')handleLogin()">
-    <div id="login-error" style="color:#C0392B;font-size:12px;min-height:18px;margin-bottom:10px"></div>
-    <button id="login-btn" onclick="handleLogin()" style="width:100%;font-size:14px;padding:12px;border-radius:6px;border:none;background:var(--green);color:#fff;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:700;letter-spacing:.02em;transition:background .15s">Sign in</button>
+    <input id="login-email" type="email" autocomplete="email" inputmode="email" placeholder="Email address" style="width:100%;font-size:16px;padding:13px 14px;border-radius:6px;border:1.5px solid var(--border);margin-bottom:10px;font-family:'Barlow',sans-serif;outline:none;min-height:48px" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+    <input id="login-password" type="password" autocomplete="current-password" placeholder="Password" style="width:100%;font-size:16px;padding:13px 14px;border-radius:6px;border:1.5px solid var(--border);margin-bottom:6px;font-family:'Barlow',sans-serif;outline:none;min-height:48px" onkeydown="if(event.key==='Enter')handleLogin()">
+    <div id="login-error" style="color:#C0392B;font-size:13px;min-height:18px;margin-bottom:10px"></div>
+    <button id="login-btn" onclick="handleLogin()" style="width:100%;font-size:15px;padding:14px;border-radius:6px;border:none;background:var(--green);color:#fff;cursor:pointer;font-family:'Barlow',sans-serif;font-weight:700;letter-spacing:.02em;transition:background .15s;min-height:48px">Sign in</button>
     <div style="margin-top:16px;font-size:12px;color:var(--text-3);text-align:center">Access is by invitation only.<br>Contact your administrator if you need access.</div>
   </div>
 </div>
