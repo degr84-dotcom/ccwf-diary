@@ -793,14 +793,24 @@ async function load(){
   const el=document.getElementById('sav-ind');
   if(el){el.textContent='Syncing...';el.classList.add('show');}
 
-  // Bug B/C fix: seed from localStorage so any unsynced local edits survive a refresh
+  // Seed from localStorage so any unsynced local edits survive a refresh.
   let localCache={};
   try{const r=localStorage.getItem(KEY);if(r)localCache=JSON.parse(r)||{};}catch(e){}
   diary={...localCache};
   allUsersDiary={};
 
+  // Render IMMEDIATELY with cached data so Today is never blank while we wait for the server.
+  loadPlantConfig();
+  Object.keys(diary).forEach(d=>migrateDayRecord(diary[d]));
+  const sdEl=document.getElementById('sidebar-date');if(sdEl)sdEl.textContent=fmtD(today);
+  renderToday();renderRec();renderSmry();
+
+  // Fetch from server with a 15s timeout so the load can never hang indefinitely
+  // (e.g. when access token is mid-refresh on a slow network).
   try{
-    const {data,error}=await sb.from('diary').select('*');
+    const fetchPromise=sb.from('diary').select('*');
+    const timeoutPromise=new Promise((_,r)=>setTimeout(()=>r(new Error('fetch timeout')),15000));
+    const {data,error}=await Promise.race([fetchPromise,timeoutPromise]);
     if(!error&&data){
       const serverDatesForUser=new Set();
       data.forEach(row=>{
@@ -825,14 +835,14 @@ async function load(){
       }
 
       try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+
+      // Re-run migrations on server-merged data and re-render with the freshest state.
+      Object.keys(diary).forEach(d=>migrateDayRecord(diary[d]));
+      autoLockPastDays();
+      renderToday();renderRec();renderSmry();
     }
-  } catch(e){console.error('Load error:',e);}
+  } catch(e){console.warn('Load error (will keep cached UI):',e.message||e);}
   if(el)el.classList.remove('show');
-  loadPlantConfig();
-  Object.keys(diary).forEach(d=>migrateDayRecord(diary[d]));
-  autoLockPastDays();
-  document.getElementById('sidebar-date').textContent=fmtD(today);
-  renderToday();renderRec();renderSmry();
 }
 
 // Auto-lock every past day (date<today) that's currently unlocked. Runs on load.
