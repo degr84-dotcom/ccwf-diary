@@ -406,6 +406,90 @@ textarea.text-input{resize:vertical;min-height:80px}
 }
 .preset-btn{font-size:12px;padding:5px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:none;cursor:pointer;font-family:'Barlow',sans-serif;color:var(--text-2);font-weight:500;transition:all .15s}
 .preset-btn:hover{border-color:var(--green-mid);color:var(--green);background:var(--green-light)}
+
+/* ── Card header row (title + action button alongside) ── */
+.card-header-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+
+/* ── Global responsive hardening (applies everywhere) ── */
+.view-sheet-btn,.add-btn,.save-day-btn,.lock-btn,.unlock-btn,.pdf-btn,.back-btn,.preset-btn,.manage-rates-btn{white-space:nowrap}
+.card-title{min-width:0}
+input,select,textarea,button{max-width:100%}
+input[type="date"],input[type="email"],input[type="password"],input[type="number"],input[type="text"]{font-size:16px}
+
+/* ── Hardening for ≤900 (mobile + tablet portrait) ── */
+@media (max-width:900px){
+  /* Date pickers inline-styled in JS get touch-sized */
+  input[type="date"]{min-height:44px;padding:8px 12px;font-size:16px !important}
+
+  /* Number inputs (fuel rate, stand-down) */
+  input[type="number"]{font-size:16px !important;min-height:44px}
+
+  /* Action-bar right group (Syncing + View Day Sheet) wraps full-width */
+  .action-bar>div:not(.action-bar-left){width:100%;flex-wrap:wrap;justify-content:space-between}
+  .action-bar>div:not(.action-bar-left)>.save-indicator{flex:1;min-width:0;font-size:12px}
+  .action-bar>div:not(.action-bar-left)>.view-sheet-btn{flex:1 1 auto;min-width:0}
+
+  /* Card header rows wrap action button below title on narrow */
+  .card-header-row{gap:6px}
+  .card-header-row .manage-rates-btn{font-size:12px;padding:8px 12px;min-height:40px}
+
+  /* Weather buttons even 2x2 on phones/tablet-portrait */
+  .wx-btn{flex:1 1 calc(50% - 6px);min-height:44px}
+
+  /* Plant + personnel add row — select grows, button stays */
+  .add-row{flex-wrap:wrap}
+  .add-select{flex:1 1 100%}
+  .add-btn{flex:1 1 100%;min-height:44px;justify-content:center}
+
+  /* Custom plant row should stack */
+  #custom-plant-row,#custom-pers-row{flex-direction:column}
+  #custom-plant-row input,#custom-pers-row input{flex:1 1 100% !important}
+
+  /* Site conditions / general text inputs always fill */
+  .text-input{display:block;width:100%;box-sizing:border-box;min-width:0}
+
+  /* On-site item: dim/restore actions wrap below name */
+  .on-site-item{flex-wrap:wrap}
+  .on-site-item>div:first-child{flex:1 1 auto;min-width:0}
+
+  /* Works/scope items keep checkbox + label, button can wrap */
+  .work-item>*{min-width:0}
+
+  /* Sheet modal toolbar wraps cleanly */
+  .sheet-toolbar{position:sticky;top:0;z-index:5}
+  .sheet-modal .sheet-scroll{padding-top:14px}
+
+  /* Photo modal toolbar */
+  .photo-modal-title{flex:1 1 100%;padding-right:0;font-size:14px}
+  .photo-modal-btn{flex:1 1 auto;min-height:44px;font-size:13px}
+  .photo-tile-img{height:140px}
+
+  /* Modal close/header buttons get tap targets */
+  .scope-photo-btn,.scope-rm-btn,.rm-btn,.work-done-btn{min-height:36px}
+
+  /* Records list: month-summary row stack on phones */
+  .rec-card .rec-hdr+div,.rec-card>div>div{flex-wrap:wrap}
+
+  /* Lock banner — let unlock button drop below text */
+  .lock-banner{flex-wrap:wrap}
+  .lock-banner .unlock-trigger{margin-left:0 !important;min-height:40px}
+
+  /* Fuel/stand-down inline cards: rows wrap */
+  #fuel-r-inp,#sd-r-inp{font-size:16px !important;min-height:44px;width:auto !important;flex:1 1 120px}
+
+  /* Date range row in records header */
+  #range-from,#range-to{font-size:16px !important;min-height:44px}
+}
+
+/* ── Extra-tight phone (≤480) hardening ── */
+@media (max-width:480px){
+  .view-sheet-btn{font-size:12px;padding:10px 12px}
+  .manage-rates-btn{font-size:11px;padding:6px 8px}
+  .page-title{font-size:18px}
+  .action-bar{margin-bottom:12px}
+  /* Squeeze date picker inline label */
+  input[type="date"]{padding:8px 10px}
+}
 </style>
 </head>
 <body>
@@ -1150,7 +1234,7 @@ function buildFormHTML(date){
     </div>
   </div>
   <div class="card${locked?' form-disabled':''}">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="card-title" style="margin-bottom:0">Plant on Site</div><button onclick="openRatesManager()" style="font-size:11px;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font-sans);color:var(--text-3)">⚙ Manage rates</button></div>
+    <div class="card-header-row"><div class="card-title" style="margin-bottom:0;flex:1;min-width:0">Plant on Site</div><button onclick="openRatesManager()" class="manage-rates-btn" style="font-size:11px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font-sans);color:var(--text-3);white-space:nowrap;flex-shrink:0">⚙ Manage rates</button></div>
     <div id="plant-list"></div>
     <div class="add-row">
       <select id="plant-sel" class="add-select"${sd||locked?' disabled':''} onchange="onPlantSelChange()"><option value="" disabled selected>Select plant to add...</option>${plantOpts}<option value="__custom__">+ Add custom plant...</option></select>
@@ -1396,7 +1480,7 @@ function renderSmry(){
     html+='<div style="flex:1"><div style="font-family:var(--font-sans);font-size:17px;font-weight:700">'+MN[parseInt(m)-1]+' '+y+'</div><div style="font-size:12px;color:var(--text-3);margin-top:2px">'+md.length+' day'+(md.length!==1?'s':'')+' &middot; '+mdone+'/'+mwork+' works done</div></div>';
     html+='<div style="font-family:monospace;font-size:16px;font-weight:500;color:var(--green);margin-right:12px">'+money(mc)+'</div><span id="chev-'+key+'" style="color:var(--text-3);font-size:18px">&#9656;</span></div>';
     html+='<div id="mb-'+key+'" style="display:none;border-top:1px solid var(--border-light)">';
-    md.forEach(function(date){var d=diary[date]||{};var allP=(d.plant||[]).concat(d.personnel||[]);var wi=d.workItems||[];html+='<div style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:0.5px solid var(--border-light);font-size:13px"><span style="font-weight:500;min-width:80px">'+fmtDShort(date)+'</span><span style="flex:1;color:var(--text-3)">'+(d.standDown?'Stand down':allP.length?allP.join(', '):'No plant')+'</span><span style="color:var(--text-3);font-size:12px">'+wi.filter(function(w){return w.done;}).length+'/'+wi.length+' works</span><span style="font-family:monospace;font-weight:500;color:var(--green)">'+money(calcCost(date))+'</span><button onclick="openDayInToday(this.dataset.d)" data-d="'+date+'" style="font-size:11px;padding:3px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font-sans);color:var(--text-3)">Edit</button></div>';});
+    md.forEach(function(date){var d=diary[date]||{};var allP=(d.plant||[]).concat(d.personnel||[]);var wi=d.workItems||[];html+='<div class="month-day-row" style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:0.5px solid var(--border-light);font-size:13px;flex-wrap:wrap"><span class="mdr-date" style="font-weight:500;min-width:80px">'+fmtDShort(date)+'</span><span class="mdr-name" style="flex:1;color:var(--text-3);min-width:0;word-break:break-word">'+(d.standDown?'Stand down':allP.length?allP.join(', '):'No plant')+'</span><span class="mdr-works" style="color:var(--text-3);font-size:12px;white-space:nowrap">'+wi.filter(function(w){return w.done;}).length+'/'+wi.length+' works</span><span class="mdr-cost" style="font-family:monospace;font-weight:500;color:var(--green);white-space:nowrap">'+money(calcCost(date))+'</span><button class="mdr-edit" onclick="openDayInToday(this.dataset.d)" data-d="'+date+'" style="font-size:11px;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font-sans);color:var(--text-3);min-height:32px">Edit</button></div>';});
     html+='<div style="display:flex;justify-content:flex-end;padding:10px 20px;font-size:13px;font-weight:500"><span style="color:var(--text-3);margin-right:12px">Month total</span><span style="font-family:monospace;color:var(--green)">'+money(mc)+'</span></div></div></div>';
   });}
   if(Object.keys(grpSum).length){html+='<div class="card" style="margin-top:8px"><div class="card-title" style="margin-bottom:12px">Works progress</div>';Object.entries(grpSum).sort(function(a,b){return a[0].localeCompare(b[0],undefined,{numeric:true});}).forEach(function(e){var g=e[0],s=e[1],pG=Math.round(s.done/s.total*100),isS=COLLECTOR_GROUPS.includes(g);html+='<div style="padding:8px 0;border-bottom:0.5px solid var(--border-light)"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:600;color:'+(isS?'var(--green)':'var(--amber)')+'">'+g+'</span><span style="font-size:12px;color:var(--text-3)">'+s.done+'/'+s.total+' done</span></div><div style="height:4px;background:var(--bg);border-radius:2px;overflow:hidden;border:1px solid var(--border-light)"><div style="height:100%;width:'+pG+'%;background:'+(isS?'var(--green-mid)':'var(--amber)')+';border-radius:2px"></div></div></div>';});html+='</div>';}
