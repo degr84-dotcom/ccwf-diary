@@ -873,12 +873,12 @@ function save(){
 }
 
 // ── Navigation ───────────────────────────────────
-function sw(tab){
+function sw(tab,keepDate){
   ['today','rec','smry'].forEach(t=>{
     document.getElementById('nav-'+t).classList.toggle('on',t===tab);
     document.getElementById('p-'+t).style.display=t===tab?'block':'none';
   });
-  if(tab==='today'){if(editDate!==today)editDate=today;renderToday();}
+  if(tab==='today'){if(!keepDate&&editDate!==today)editDate=today;renderToday();}
   if(tab==='rec')renderRec();
   if(tab==='smry')renderSmry();
 }
@@ -1333,7 +1333,7 @@ function buildFormHTML(date){
 
 function openDayInToday(date){
   editDate=date;
-  sw('today');
+  sw('today',true);
 }
 function setEditDate(date){
   if(!date)return;
