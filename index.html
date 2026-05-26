@@ -1529,9 +1529,12 @@ function renderSmry(){
   html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
   html+='<div style="display:flex;align-items:center;gap:6px;font-size:13px"><label style="color:var(--text-3)">From</label><input type="date" id="range-from" value="'+(allDates[0]||today)+'" style="font-size:13px;padding:5px 8px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--surface);color:var(--text)" onchange="updateRangeTotal()"></div>';
   html+='<div style="display:flex;align-items:center;gap:6px;font-size:13px"><label style="color:var(--text-3)">To</label><input type="date" id="range-to" value="'+today+'" style="font-size:13px;padding:5px 8px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--surface);color:var(--text)" onchange="updateRangeTotal()"></div></div>';
-  html+='<div style="margin-top:14px;padding:14px 18px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center">';
+  html+='<div style="margin-top:14px;padding:14px 18px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">';
   html+='<div><div style="font-size:13px;color:var(--text-3)">Period total (ex GST)</div><div style="font-size:11px;color:var(--text-3);margin-top:2px" id="range-days-label"></div></div>';
-  html+='<div style="font-family:monospace;font-size:22px;font-weight:500;color:var(--green)" id="range-total">'+money(0)+'</div></div></div>';
+  html+='<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">';
+  html+='<div style="font-family:monospace;font-size:22px;font-weight:500;color:var(--green)" id="range-total">'+money(0)+'</div>';
+  html+='<button id="range-pdf-btn" onclick="generateRangePDF()" style="display:flex;align-items:center;gap:6px;font-size:13px;padding:8px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--green-mid);background:var(--green);color:#fff;cursor:pointer;font-family:Barlow,sans-serif;font-weight:600;white-space:nowrap;min-height:38px" title="Download a single PDF combining every day sheet in the selected range">⬇ Download range PDF</button>';
+  html+='</div></div></div>';
   html+='<div class="card-title" style="margin-bottom:10px">Monthly breakdown</div>';
   if(!allDates.length){html+='<div class="card"><div style="font-size:13px;color:var(--text-3);font-style:italic;text-align:center;padding:1rem">No records yet.</div></div>';}
   else{Object.keys(byMonth).sort().reverse().forEach(function(key){var parts=key.split('-'),y=parts[0],m=parts[1];var md=byMonth[key];var mc=md.reduce(function(a,d){return a+calcCost(d);},0);var mdone=md.reduce(function(a,d){return a+(diary[d].workItems||[]).filter(function(w){return w.done;}).length;},0);var mwork=md.reduce(function(a,d){return a+(diary[d].workItems||[]).length;},0);
@@ -1905,44 +1908,40 @@ function importData(event){
 }
 
 // ── PDF generation ───────────────────────────────
-async function generatePDF(){
-  const btn=document.getElementById('pdf-btn');
-  btn.textContent='Generating...';btn.disabled=true;
-  try{
-    const date=currentSheetDate;
-    const d=diary[date]||{};const sd=d.standDown;
-
-    // Pre-fetch any photos for this day so we can embed them
-    const photoBundles=[];
-    if(d.scopePhotos){
-      const scopeLookup={};
-      (d.workItems||[]).forEach(function(w,wi){scopeLookup['wi_'+date+'_'+wi]={label:w.group+(w.detail?' — '+w.detail:''),sec:'Works'};});
-    (d.powerlineItems||[]).forEach(function(w,wi){scopeLookup['pl_'+date+'_'+wi]={label:'Powerline — '+w.detail,sec:'Powerline Access Track'};});
-      (d.customScope||[]).forEach(c=>{scopeLookup[c.id]={label:c.label,sec:c.section||'Custom items'};});
-      btn.textContent='Fetching photos...';
-      for(const [sid,arr] of Object.entries(d.scopePhotos)){
-        if(!arr||!arr.length)continue;
-        const info=scopeLookup[sid]||{label:'(unknown scope)',sec:''};
-        const photos=[];
-        for(const p of arr){
-          try{
-            const url=await getSignedUrl(p.path);
-            if(!url)continue;
-            const res=await fetch(url);
-            if(!res.ok)continue;
-            const blob=await res.blob();
-            const dataUrl=await new Promise((r,j)=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=j;fr.readAsDataURL(blob);});
-            photos.push({...p,dataUrl});
-          }catch(e){console.warn('Photo fetch error:',p.path,e);}
-        }
-        if(photos.length)photoBundles.push({label:info.label,section:info.sec,photos});
-      }
-      btn.textContent='Generating...';
+// Fetch and embed-encode all photos for a given day. Returned bundles are ready
+// to drop into a jsPDF doc as base64 data URLs.
+async function _fetchPhotoBundles(date,d){
+  const bundles=[];
+  if(!d.scopePhotos)return bundles;
+  const scopeLookup={};
+  (d.workItems||[]).forEach(function(w,wi){scopeLookup['wi_'+date+'_'+wi]={label:w.group+(w.detail?' — '+w.detail:''),sec:'Works'};});
+  (d.powerlineItems||[]).forEach(function(w,wi){scopeLookup['pl_'+date+'_'+wi]={label:'Powerline — '+w.detail,sec:'Powerline Access Track'};});
+  (d.customScope||[]).forEach(c=>{scopeLookup[c.id]={label:c.label,sec:c.section||'Custom items'};});
+  for(const [sid,arr] of Object.entries(d.scopePhotos)){
+    if(!arr||!arr.length)continue;
+    const info=scopeLookup[sid]||{label:'(unknown scope)',sec:''};
+    const photos=[];
+    for(const p of arr){
+      try{
+        const url=await getSignedUrl(p.path);
+        if(!url)continue;
+        const res=await fetch(url);
+        if(!res.ok)continue;
+        const blob=await res.blob();
+        const dataUrl=await new Promise((r,j)=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=j;fr.readAsDataURL(blob);});
+        photos.push({...p,dataUrl});
+      }catch(e){console.warn('Photo fetch error:',p.path,e);}
     }
+    if(photos.length)bundles.push({label:info.label,section:info.sec,photos});
+  }
+  return bundles;
+}
 
-    const {jsPDF}=window.jspdf;
-    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    const W=210,ml=20,mr=20,cw=W-ml-mr;
+// Render a single day's content into the current page(s) of `doc`. Caller is
+// responsible for calling doc.addPage() between days when building a range PDF.
+function _renderDaySheetToDoc(doc,date,photoBundles){
+  const d=diary[date]||{};const sd=d.standDown;
+  const W=210,ml=20,mr=20,cw=W-ml-mr;
     let y=20;
     const green=[31,92,46],greenMid=[46,125,62],grey=[100,100,100],lightGrey=[180,180,180],black=[26,26,26];
     function ln(x1,y1,x2,y2,color=[220,220,215],lw=0.3){doc.setDrawColor(...color);doc.setLineWidth(lw);doc.line(x1,y1,x2,y2);}
@@ -2056,10 +2055,54 @@ async function generatePDF(){
         y=rowTop+thumbH+12;
       }
     }
+}
 
+// Single-day PDF: used by the Day Sheet modal's Download PDF button.
+async function generatePDF(){
+  const btn=document.getElementById('pdf-btn');
+  if(btn){btn.textContent='Generating...';btn.disabled=true;}
+  try{
+    const date=currentSheetDate;
+    const d=diary[date]||{};
+    if(btn)btn.textContent='Fetching photos...';
+    const photoBundles=await _fetchPhotoBundles(date,d);
+    if(btn)btn.textContent='Generating...';
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    _renderDaySheetToDoc(doc,date,photoBundles);
     doc.save(`CCWF_Day_Sheet_${date}.pdf`);
   }catch(err){console.error(err);alert('PDF generation failed: '+err.message);}
-  btn.textContent='⬇ Download PDF';btn.disabled=false;
+  if(btn){btn.textContent='⬇ Download PDF';btn.disabled=false;}
+}
+
+// Range PDF: combine all day sheets between the From/To inputs on the Summary
+// page into one downloadable document.
+async function generateRangePDF(){
+  const btn=document.getElementById('range-pdf-btn');
+  const fromEl=document.getElementById('range-from');
+  const toEl=document.getElementById('range-to');
+  if(!fromEl||!toEl){alert('Range inputs not found.');return;}
+  const from=fromEl.value,to=toEl.value;
+  if(!from||!to){alert('Please pick a From and To date.');return;}
+  if(from>to){alert('From date must be on or before To date.');return;}
+  const dates=Object.keys(diary).filter(d=>d>=from&&d<=to).sort();
+  if(!dates.length){alert('No day sheets found in this range.');return;}
+  if(btn){btn.textContent='Generating...';btn.disabled=true;}
+  try{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    let first=true;
+    for(const date of dates){
+      if(btn)btn.textContent=`Day ${dates.indexOf(date)+1}/${dates.length}...`;
+      if(!first)doc.addPage();
+      first=false;
+      const d=diary[date]||{};
+      const photoBundles=await _fetchPhotoBundles(date,d);
+      _renderDaySheetToDoc(doc,date,photoBundles);
+    }
+    doc.save(`CCWF_Day_Sheets_${from}_to_${to}.pdf`);
+  }catch(err){console.error(err);alert('Range PDF generation failed: '+err.message);}
+  if(btn){btn.textContent='⬇ Download range PDF';btn.disabled=false;}
 }
 
 // Bug D fix: detect date rollover (e.g. tab left open past midnight) — uses LOCAL time
