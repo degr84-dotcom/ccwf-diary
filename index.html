@@ -517,7 +517,7 @@ input[type="date"],input[type="email"],input[type="password"],input[type="number
     <div class="sidebar-header">
       <div class="sidebar-logo">Civil Works</div>
       <div class="sidebar-project">Clarke Creek<br>Wind Farm</div>
-      <div class="sidebar-sub">Part D — Civil Scope</div>
+      <div class="sidebar-sub">Works Tracker</div>
     </div>
     <div class="sidebar-nav">
       <button class="nav-item on" id="nav-today" onclick="sw('today')">
@@ -1838,7 +1838,7 @@ function openSheet(date){
     <div class="doc-logo-block">
       <div class="doc-label">Civil Works Day Sheet</div>
       <div class="doc-title">Clarke Creek<br>Wind Farm</div>
-      <div class="doc-sub">Part D — Civil Scope of Works</div>
+      <div class="doc-sub">Works Tracker</div>
     </div>
     <div class="doc-meta-block">
       <div class="doc-date">${fmtDShort(date)}</div>
@@ -1951,7 +1951,7 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
     doc.text('CIVIL WORKS DAY SHEET',ml,14);
     doc.setFontSize(18);doc.text('Clarke Creek Wind Farm',ml,24);
     doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(200,230,205);
-    doc.text('Part D — Civil Scope of Works',ml,31);
+    doc.text('Works Tracker',ml,31);
     doc.setFontSize(18);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
     doc.text(fmtDShort(date),W-mr,24,{align:'right'});
     doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(200,230,205);
