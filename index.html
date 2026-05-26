@@ -261,8 +261,8 @@ textarea.text-input{resize:vertical;min-height:80px}
 
 /* ── Mobile + Tablet portrait (≤900px) ── stacked layout, touch sizes */
 @media (max-width:900px){
-  /* Layout */
-  .app{display:flex;flex-direction:column;min-height:100vh;min-height:-webkit-fill-available}
+  /* Layout — reset grid columns so sidebar slot doesn't reserve 220px */
+  .app{display:flex;flex-direction:column;grid-template-columns:none;min-height:100vh;min-height:-webkit-fill-available}
   .main{padding:16px 14px;padding-bottom:90px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
   /* Bottom nav bar */
@@ -726,7 +726,8 @@ function showLogin(){
 
 function showApp(){
   document.getElementById('login-overlay').style.display='none';
-  document.getElementById('app').style.display='grid';
+  // Clear inline display so CSS decides: grid on desktop, flex column on <=900px
+  document.getElementById('app').style.display='';
   const uEl=document.getElementById('sidebar-user');
   if(uEl)uEl.textContent=currentUser?.email||'';
   const aEl=document.getElementById('admin-badge');
