@@ -791,6 +791,27 @@ async function handleLogout(){
 function localDateStr(d){d=d||new Date();var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,'0');var day=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+day;}
 let diary={},today=localDateStr(),editDate=today,saveT=null;
 
+// A day record counts as empty when it holds nothing the user actually entered.
+// Used to prevent auto-creation of ghost rows when the user just opens the app on
+// a date without touching any field.
+function isDayEmpty(d){
+  if(!d)return true;
+  if((d.plant||[]).length)return false;
+  if((d.personnel||[]).length)return false;
+  if((d.customPlant||[]).length)return false;
+  if((d.customPers||[]).length)return false;
+  if((d.workItems||[]).length)return false;
+  if((d.powerlineItems||[]).length)return false;
+  if((d.customScope||[]).length)return false;
+  if(d.weather)return false;
+  if(d.conditions&&String(d.conditions).trim())return false;
+  if(d.notes&&String(d.notes).trim())return false;
+  if(d.fuelL)return false;
+  if(d.standDown)return false;
+  if(d.scopePhotos&&Object.values(d.scopePhotos).some(a=>(a||[]).length))return false;
+  return true;
+}
+
 // ── Storage ──────────────────────────────────────
 async function load(){
   const el=document.getElementById('sav-ind');
@@ -827,8 +848,9 @@ async function load(){
         }
       });
 
-      // Push any local-only dates (edits that never made it to Supabase in a previous session)
-      const localOnly=Object.keys(localCache).filter(d=>!serverDatesForUser.has(d));
+      // Push any local-only dates (edits that never made it to Supabase in a previous session).
+      // Skip empty records so opening the app doesn't create a ghost row in the cloud.
+      const localOnly=Object.keys(localCache).filter(d=>!serverDatesForUser.has(d)&&!isDayEmpty(localCache[d]));
       if(localOnly.length&&currentUser?.id){
         const rows=localOnly.map(d=>({date:d,user_id:currentUser.id,data:{...localCache[d],_userEmail:currentUser.email}}));
         sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error:syncErr})=>{
@@ -854,14 +876,21 @@ async function load(){
 function autoLockPastDays(){
   if(!currentUser?.id)return;
   const rows=[];
+  // Drop empty in-memory shells for past days so they never get persisted. These come
+  // from renderToday() instantiating a default record just to render the form.
+  Object.keys(diary).forEach(date=>{
+    if(date<today && diary[date] && !diary[date].locked && isDayEmpty(diary[date])){
+      delete diary[date];
+    }
+  });
   Object.keys(diary).forEach(date=>{
     if(date<today && diary[date] && !diary[date].locked){
       diary[date].locked=true;
       rows.push({date,user_id:currentUser.id,data:{...diary[date],_userEmail:currentUser.email}});
     }
   });
-  if(!rows.length)return;
   try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+  if(!rows.length)return;
   sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error})=>{
     if(error)console.warn('Auto-lock sync error:',error);
     else console.log('Auto-locked',rows.length,'past day(s)');
@@ -874,6 +903,13 @@ async function saveNow(){
   clearTimeout(saveT);
   try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
   const btns=document.querySelectorAll('.save-day-btn');
+  // Manual save on an empty day: no server row needed. Don't create a ghost record.
+  if(isDayEmpty(diary[editDate])){
+    const el=document.getElementById('sav-ind');
+    if(el){el.textContent='Nothing to save yet';setTimeout(()=>el.classList.remove('show'),1800);el.classList.add('show');}
+    btns.forEach(b=>{b.disabled=false;b.textContent='💾 Save now';});
+    return;
+  }
   btns.forEach(b=>{b.disabled=true;b.textContent='Saving...';});
   const el=document.getElementById('sav-ind');
   if(el){el.textContent='Saving...';el.classList.add('show');}
@@ -910,6 +946,13 @@ function save(){
     saveT=null;
     if(!currentUser?.id){
       if(el){el.textContent='Local only — not signed in';setTimeout(()=>el.classList.remove('show'),1800);}
+      return;
+    }
+    // Don't auto-create a Supabase row for a day that has nothing in it yet.
+    // First real edit will flip isDayEmpty to false and a subsequent save() will sync.
+    if(isDayEmpty(diary[targetDate])){
+      if(el){el.textContent='';el.classList.remove('show');}
+      renderRec();renderSmry();
       return;
     }
     try{
@@ -1447,7 +1490,10 @@ function closeEditModal(){
 
 // ── Records tab ──────────────────────────────────
 function renderRec(){
-  const dates=Object.keys(diary).sort().reverse();
+  // Hide unlocked empty shells (e.g. today opened but not yet edited) so they don't
+  // appear as ghost $0 cards. Locked empties are kept visible because a user/admin
+  // explicitly locked them — they're real (if pointless) records.
+  const dates=Object.keys(diary).filter(d=>diary[d]?.locked||!isDayEmpty(diary[d])).sort().reverse();
   const el=document.getElementById('p-rec');
   let run=0;
   if(!dates.length){el.innerHTML=`<div class="page-title">Records</div><div class="page-sub">No records yet.</div>`;return;}
