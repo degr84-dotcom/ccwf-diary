@@ -848,6 +848,16 @@ async function load(){
         }
       });
 
+      // Drop orphaned empty entries from local cache: dates that aren't on the server
+      // and have no user content. These are stale shells from previous sessions (or
+      // rows we just deleted server-side); they would otherwise re-render as ghost
+      // $0 cards forever. Done regardless of `locked` flag — locked-empty is still empty.
+      Object.keys(diary).forEach(d=>{
+        if(!serverDatesForUser.has(d)&&isDayEmpty(diary[d])){
+          delete diary[d];
+        }
+      });
+
       // Push any local-only dates (edits that never made it to Supabase in a previous session).
       // Skip empty records so opening the app doesn't create a ghost row in the cloud.
       const localOnly=Object.keys(localCache).filter(d=>!serverDatesForUser.has(d)&&!isDayEmpty(localCache[d]));
