@@ -732,7 +732,7 @@ async function initAuth(){
       if(currentUser?.id===session.user.id&&authReady)return;  // de-dupe
       currentUser=session.user;authReady=true;showApp();await load();
     }
-    else if(event==='SIGNED_OUT'){currentUser=null;authReady=false;diary={};allUsersDiary={};showLogin();}
+    else if(event==='SIGNED_OUT'){currentUser=null;authReady=false;diary={};allUsersDiary={};unlockedThisSession=new Set();showLogin();}
   });
   // Generous 60s timeout — wake-from-sleep refresh can take >20s on slow networks
   await tryRestoreSession(60000);
@@ -796,6 +796,9 @@ async function handleLogout(){
 // wrong for AEST users for ~10 hours after midnight local — see localDateStr usage below.
 function localDateStr(d){d=d||new Date();var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,'0');var day=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+day;}
 let diary={},today=localDateStr(),editDate=today,saveT=null;
+// Days the user has explicitly unlocked this session. They must NOT be re-locked
+// or overwritten by an in-flight load()/autoLockPastDays() while being edited.
+let unlockedThisSession=new Set();
 
 // A day record counts as empty when it holds nothing the user actually entered.
 // Used to prevent auto-creation of ghost rows when the user just opens the app on
@@ -845,7 +848,13 @@ async function load(){
       const serverDatesForUser=new Set();
       data.forEach(row=>{
         if(row.user_id===currentUser?.id){
-          diary[row.date]=row.data;        // server wins for dates present on both
+          // Don't let a late-arriving fetch clobber a day the user is actively
+          // editing after unlocking it this session — keep local, just ensure unlocked.
+          if(unlockedThisSession.has(row.date)){
+            if(diary[row.date])diary[row.date].locked=false;
+          }else{
+            diary[row.date]=row.data;      // server wins for dates present on both
+          }
           serverDatesForUser.add(row.date);
         }
         if(isAdmin()&&row.user_id!==currentUser?.id){
@@ -887,20 +896,20 @@ async function load(){
 }
 
 // Auto-lock every past day (date<today) that's currently unlocked. Runs on load.
-// Users can still hit Unlock on a past day to edit it; the next load will re-lock,
-// which is intentional — locking is the safe default for the historical record.
+// Days the user has explicitly unlocked this session are skipped so editing isn't
+// undone mid-session; a fresh page load (new session) re-locks them as the safe default.
 function autoLockPastDays(){
   if(!currentUser?.id)return;
   const rows=[];
   // Drop empty in-memory shells for past days so they never get persisted. These come
   // from renderToday() instantiating a default record just to render the form.
   Object.keys(diary).forEach(date=>{
-    if(date<today && diary[date] && !diary[date].locked && isDayEmpty(diary[date])){
+    if(date<today && diary[date] && !diary[date].locked && !unlockedThisSession.has(date) && isDayEmpty(diary[date])){
       delete diary[date];
     }
   });
   Object.keys(diary).forEach(date=>{
-    if(date<today && diary[date] && !diary[date].locked){
+    if(date<today && diary[date] && !diary[date].locked && !unlockedThisSession.has(date)){
       diary[date].locked=true;
       rows.push({date,user_id:currentUser.id,data:{...diary[date],_userEmail:currentUser.email}});
     }
@@ -1111,6 +1120,7 @@ function setNotes(v){if(!day(editDate).locked){day(editDate).notes=v;save();}}
 // ── Lock / Unlock ────────────────────────────────
 function lockDay(date){
   if(!confirm('Lock '+fmtD(date)+'?\n\nLocked days cannot be edited until unlocked.'))return;
+  unlockedThisSession.delete(date);
   day(date).locked=true;
   // Save locked state directly
   const prev=editDate;editDate=date;save();editDate=prev;
@@ -1120,6 +1130,7 @@ function lockDay(date){
 }
 function unlockDay(date){
   if(!confirm('Unlock '+fmtD(date)+' for editing?'))return;
+  unlockedThisSession.add(date);
   day(date).locked=false;
   const prev=editDate;editDate=date;save();editDate=prev;
   if(date===today)renderToday();
@@ -1132,6 +1143,7 @@ async function deleteDay(date){
   if(d.locked){alert('This day is locked. Unlock it first, then delete.');return;}
   if(!confirm('Delete the day sheet for '+fmtD(date)+'?\n\nThis permanently removes it from records on every device and cannot be undone.'))return;
   delete diary[date];
+  unlockedThisSession.delete(date);
   try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
   if(currentUser?.id){
     try{
