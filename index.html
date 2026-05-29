@@ -2049,6 +2049,8 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
     const green=[31,92,46],greenMid=[46,125,62],grey=[100,100,100],lightGrey=[180,180,180],black=[26,26,26];
     function ln(x1,y1,x2,y2,color=[220,220,215],lw=0.3){doc.setDrawColor(...color);doc.setLineWidth(lw);doc.line(x1,y1,x2,y2);}
     function rct(x,rx,rw,rh,color){doc.setFillColor(...color);doc.rect(x,rx,rw,rh,'F');}
+    // Paginate: if the next block of `needed` mm won't fit before the bottom margin, start a new page.
+    function ensureSpace(needed){ if(y+needed>277){doc.addPage();y=20;} }
     rct(0,0,W,42,green);
     doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
     doc.text('CIVIL WORKS DAY SHEET',ml,14);
@@ -2062,6 +2064,7 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
     if(d.conditions)doc.text(d.conditions.length>40?d.conditions.slice(0,40)+'…':d.conditions,W-mr,36,{align:'right'});
     y=52;
     function secTitle(title){
+      ensureSpace(16); // keep the section header with at least one row of content
       rct(ml,y,cw,6,greenMid);
       doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
       doc.text(title.toUpperCase(),ml+3,y+4);
@@ -2077,8 +2080,8 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
       doc.setFontSize(9);doc.text('Stand down — plant & personnel costs replaced',ml,y);
       doc.text(money(SD_R),W-mr,y,{align:'right'});plantSubtotal=SD_R;y+=7;
     } else {
-      allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantSubtotal+=r;doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
-      allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantSubtotal+=r;doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
       if(!allPlant.length&&!allPers.length){doc.setTextColor(...grey);doc.setFontSize(9);doc.text('No plant or personnel recorded',ml,y);y+=7;doc.setTextColor(...black);}
     }
     const fuelAmt=(d.fuelL||0)*FUEL_R;
@@ -2092,14 +2095,16 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
         var isStd=COLLECTOR_GROUPS.includes(w.group);
         // Group label on its own line; detail wraps below it. Status sits on the last
         // detail line (or the group line if there's no detail) so nothing overlaps.
+        var dl = w.detail ? doc.splitTextToSize(w.detail,cw-60) : null;
+        var itemH = 5 + (dl ? dl.length*5 : 0) + 6; // group line + detail lines + status/gap
+        ensureSpace(itemH);
         doc.setFont('helvetica','bold');doc.setFontSize(8);
         doc.setTextColor(...(isStd?greenMid:[123,94,0]));
         doc.text((w.group||'').toUpperCase(),ml+2,y);
         var statusY=y;
-        if(w.detail){
+        if(dl){
           y+=5;
           doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
-          var dl=doc.splitTextToSize(w.detail,cw-60);
           doc.text(dl,ml+2,y);
           statusY=y+(dl.length-1)*5;
           y+=dl.length*5;
@@ -2111,10 +2116,11 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
       });
       const plItemsPdf=d.powerlineItems||[];
       if(plItemsPdf.length){
-        y+=4;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...black);doc.text('Powerline Access Track',ml,y);y+=6;
+        y+=4;ensureSpace(12);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...black);doc.text('Powerline Access Track',ml,y);y+=6;
         plItemsPdf.forEach(function(w){
-          doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
-          var dl=doc.splitTextToSize(w.detail||'',cw-60);doc.text(dl,ml+4,y);
+          var dl=doc.splitTextToSize(w.detail||'',cw-60);
+          ensureSpace(dl.length*5+3);
+          doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);doc.text(dl,ml+4,y);
           var sY=y+(dl.length-1)*5;
           doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...(w.done?greenMid:[123,94,0]));
           doc.text(w.done?'COMPLETED':'IN PROGRESS',W-mr,sY,{align:'right'});
@@ -2124,13 +2130,14 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
     } else {doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...grey);doc.text('No works recorded.',ml,y);y+=8;}
     y+=4;
     if(d.notes){
+      const lines=doc.splitTextToSize(d.notes,cw-6);
+      ensureSpace(16+lines.length*5+6); // keep title with its box
       secTitle('Notes');
       doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
-      const lines=doc.splitTextToSize(d.notes,cw-6);
       rct(ml,y-3,cw,lines.length*5+6,[245,244,240]);
       doc.text(lines,ml+4,y+1);y+=lines.length*5+10;
     }
-    y+=4;rct(ml,y,cw,14,green);
+    y+=4;ensureSpace(36);rct(ml,y,cw,14,green);
     doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(255,255,255);
     doc.text('DAY TOTAL (EX GST)',ml+4,y+9);doc.setFontSize(14);doc.text(money(calcCost(date)),W-mr,y+9,{align:'right'});y+=22;
     ln(ml,y,W-mr,y);y+=4;
