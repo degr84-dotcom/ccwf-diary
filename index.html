@@ -2090,23 +2090,34 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
     if(workedItems.length){
       workedItems.forEach(function(w){
         var isStd=COLLECTOR_GROUPS.includes(w.group);
+        // Group label on its own line; detail wraps below it. Status sits on the last
+        // detail line (or the group line if there's no detail) so nothing overlaps.
         doc.setFont('helvetica','bold');doc.setFontSize(8);
-        doc.setTextColor(...(isStd?[46,125,62]:[123,94,0]));
-        doc.text(w.group.toUpperCase(),ml+2,y);
-        if(w.detail){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);var dl=doc.splitTextToSize(w.detail,cw-60);doc.text(dl,ml+10,y);y+=dl.length*5;}
+        doc.setTextColor(...(isStd?greenMid:[123,94,0]));
+        doc.text((w.group||'').toUpperCase(),ml+2,y);
+        var statusY=y;
+        if(w.detail){
+          y+=5;
+          doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
+          var dl=doc.splitTextToSize(w.detail,cw-60);
+          doc.text(dl,ml+2,y);
+          statusY=y+(dl.length-1)*5;
+          y+=dl.length*5;
+        }
         doc.setFont('helvetica','bold');doc.setFontSize(8);
-        doc.setTextColor(...(w.done?[46,125,62]:[123,94,0]));
-        doc.text(w.done?'COMPLETED':'IN PROGRESS',W-mr,y,{align:'right'});
-        doc.setTextColor(...black);y+=8;
+        doc.setTextColor(...(w.done?greenMid:[123,94,0]));
+        doc.text(w.done?'COMPLETED':'IN PROGRESS',W-mr,statusY,{align:'right'});
+        doc.setTextColor(...black);y+=6;
       });
       const plItemsPdf=d.powerlineItems||[];
       if(plItemsPdf.length){
         y+=4;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...black);doc.text('Powerline Access Track',ml,y);y+=6;
         plItemsPdf.forEach(function(w){
-          doc.setFont('helvetica','normal');doc.setFontSize(9);
-          var dl=doc.splitTextToSize(w.detail,cw-60);doc.text(dl,ml+4,y);
-          doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...(w.done?[46,125,62]:[123,94,0]));
-          doc.text(w.done?'COMPLETED':'IN PROGRESS',W-mr,y,{align:'right'});
+          doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...black);
+          var dl=doc.splitTextToSize(w.detail||'',cw-60);doc.text(dl,ml+4,y);
+          var sY=y+(dl.length-1)*5;
+          doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...(w.done?greenMid:[123,94,0]));
+          doc.text(w.done?'COMPLETED':'IN PROGRESS',W-mr,sY,{align:'right'});
           doc.setTextColor(...black);y+=dl.length*5+3;
         });
       }
