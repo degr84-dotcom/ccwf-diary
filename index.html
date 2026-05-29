@@ -848,13 +848,14 @@ async function load(){
       const serverDatesForUser=new Set();
       data.forEach(row=>{
         if(row.user_id===currentUser?.id){
-          // Don't let a late-arriving fetch clobber a day the user is actively
-          // editing after unlocking it this session — keep local, just ensure unlocked.
+          // Don't let a late-arriving fetch clobber a day the user is actively working
+          // on: one they unlocked this session, or the past day they currently have open.
+          const editingThis=row.date===editDate&&row.date<today&&diary[row.date]&&!isDayEmpty(diary[row.date]);
           if(unlockedThisSession.has(row.date)){
-            if(diary[row.date])diary[row.date].locked=false;
-          }else{
+            if(diary[row.date])diary[row.date].locked=false;  // keep local, ensure unlocked
+          }else if(!editingThis){
             diary[row.date]=row.data;      // server wins for dates present on both
-          }
+          }                                 // else: keep local for the open day
           serverDatesForUser.add(row.date);
         }
         if(isAdmin()&&row.user_id!==currentUser?.id){
@@ -904,12 +905,14 @@ function autoLockPastDays(){
   // Drop empty in-memory shells for past days so they never get persisted. These come
   // from renderToday() instantiating a default record just to render the form.
   Object.keys(diary).forEach(date=>{
-    if(date<today && diary[date] && !diary[date].locked && !unlockedThisSession.has(date) && isDayEmpty(diary[date])){
+    if(date<today && date!==editDate && diary[date] && !diary[date].locked && !unlockedThisSession.has(date) && isDayEmpty(diary[date])){
       delete diary[date];
     }
   });
   Object.keys(diary).forEach(date=>{
-    if(date<today && diary[date] && !diary[date].locked && !unlockedThisSession.has(date)){
+    // Never lock the day the user currently has open (editDate) or one they unlocked
+    // this session — locking it would disable the form out from under them mid-edit.
+    if(date<today && date!==editDate && diary[date] && !diary[date].locked && !unlockedThisSession.has(date)){
       diary[date].locked=true;
       rows.push({date,user_id:currentUser.id,data:{...diary[date],_userEmail:currentUser.email}});
     }
