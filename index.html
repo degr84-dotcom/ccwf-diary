@@ -69,7 +69,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 .edit-btn:hover{background:var(--green);color:#fff}
 .locked-badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:#E8F3EA;color:var(--green);border:1px solid var(--green-mid);white-space:nowrap}
 .rec-card.locked{border-left:3px solid var(--green-mid)}
-.form-disabled input,.form-disabled select,.form-disabled textarea,.form-disabled button:not(.unlock-trigger){pointer-events:none;opacity:.5}
+.form-disabled input,.form-disabled select,.form-disabled textarea,.form-disabled button:not(.unlock-trigger):not(.photo-trigger):not(.scope-photo-btn){pointer-events:none;opacity:.5}
 .sidebar-date{font-family:'DM Mono',monospace;font-size:11px;color:rgba(255,255,255,.4)}
 .main{padding:32px 40px;overflow-y:auto}
 /* Cards */
@@ -1127,7 +1127,9 @@ function lockDay(date){
   day(date).locked=true;
   // Save locked state directly
   const prev=editDate;editDate=date;save();editDate=prev;
-  if(date===today)renderToday();
+  // The Today view is the active edit surface (the Edit Day modal is unused).
+  // Refresh it whenever the day being (un)locked is the one currently open.
+  if(editDate===date)renderToday();
   else renderEditModal(date);
   renderRec();
 }
@@ -1136,7 +1138,7 @@ function unlockDay(date){
   unlockedThisSession.add(date);
   day(date).locked=false;
   const prev=editDate;editDate=date;save();editDate=prev;
-  if(date===today)renderToday();
+  if(editDate===date)renderToday();
   else renderEditModal(date);
   renderRec();
 }
@@ -1268,7 +1270,7 @@ function renderWorks(){
         +'<div style="font-size:12px;font-weight:600;color:'+(isStd?'var(--green)':'var(--amber)')+';margin-bottom:2px">'+w.group+'</div>'
         +'<div class="work-label" style="color:'+(w.done?'var(--text-3)':'var(--text-2)')+(w.done?';text-decoration:line-through':'')+'">'+(w.detail||'')+'</div>'
       +'</div>'
-      +'<button onclick="'+pClick+'" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;border:1px solid '+(pc>0?'var(--green-mid)':'var(--border)')+';background:'+(pc>0?'var(--green-light)':'transparent')+';color:'+(pc>0?'var(--green)':'var(--text-3)')+';cursor:pointer;font-size:12px;white-space:nowrap;line-height:1"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1F5C2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'+(pc>0?' '+pc:'')+'</button>'
+      +'<button class="photo-trigger" onclick="'+pClick+'" title="Add or view photos for this work item" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;border:1px solid '+(pc>0?'var(--green-mid)':'var(--border)')+';background:'+(pc>0?'var(--green-light)':'transparent')+';color:'+(pc>0?'var(--green)':'var(--text-3)')+';cursor:pointer;font-size:12px;white-space:nowrap;line-height:1"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1F5C2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'+(pc>0?' '+pc:'')+'</button>'
       +(!locked?('<button class="work-done-btn'+(w.done?' done':'')+'" onclick="'+dClick+'">'+(w.done?'✓ Done':'Mark done')+'</button>'
         +'<button class="rm-btn" onclick="'+rClick+'" style="padding:4px 8px">✕</button>'):'')
       +(locked&&w.done?'<span class="locked-badge">✓ Done</span>':'')
@@ -1292,7 +1294,7 @@ function renderPowerline(){
       +'<div style="flex:1;min-width:0">'
         +'<div class="work-label" style="color:'+(w.done?'var(--text-3)':'var(--text-2)')+(w.done?';text-decoration:line-through':'')+'">'+(w.detail||'')+'</div>'
       +'</div>'
-      +'<button onclick="'+pClick+'" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;border:1px solid '+(pc>0?'var(--green-mid)':'var(--border)')+';background:'+(pc>0?'var(--green-light)':'transparent')+';color:'+(pc>0?'var(--green)':'var(--text-3)')+';cursor:pointer;font-size:12px;white-space:nowrap;line-height:1"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1F5C2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'+(pc>0?' '+pc:'')+'</button>'
+      +'<button class="photo-trigger" onclick="'+pClick+'" title="Add or view photos for this powerline item" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;border:1px solid '+(pc>0?'var(--green-mid)':'var(--border)')+';background:'+(pc>0?'var(--green-light)':'transparent')+';color:'+(pc>0?'var(--green)':'var(--text-3)')+';cursor:pointer;font-size:12px;white-space:nowrap;line-height:1"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1F5C2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'+(pc>0?' '+pc:'')+'</button>'
       +(!locked?('<button class="work-done-btn'+(w.done?' done':'')+'" onclick="'+dClick+'">'+(w.done?'✓ Done':'Mark done')+'</button>'
         +'<button class="rm-btn" onclick="'+rClick+'" style="padding:4px 8px">✕</button>'):'')
       +(locked&&w.done?'<span class="locked-badge">✓ Done</span>':'')
