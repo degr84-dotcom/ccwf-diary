@@ -548,6 +548,9 @@ input[type="date"],input[type="email"],input[type="password"],input[type="number
 
   <!-- Main content -->
   <main class="main">
+    <!-- Sticky sync-failure banner. Lives outside the tab containers so it survives
+         every re-render and stays visible until the next successful save. -->
+    <div id="sync-err-banner" style="display:none;background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--red);align-items:center;gap:10px;margin-bottom:14px;font-weight:500;flex-wrap:wrap"></div>
     <div id="p-today"></div>
     <div id="p-rec" style="display:none"></div>
     <div id="p-smry" style="display:none"></div>
@@ -697,6 +700,7 @@ function migrateDayRecord(d){
   }
 }
 let currentUser=null;
+let currentAccessToken=null;  // kept fresh so pagehide flush can authenticate
 let allUsersDiary={};  // admin only: {userId: {email, records}}
 
 function isAdmin(){return currentUser?.email==='degen.runge@squadronenergy.com';}
@@ -710,7 +714,7 @@ async function tryRestoreSession(timeoutMs){
   try{
     const timeout=new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),timeoutMs||60000));
     const {data:{session}}=await Promise.race([sb.auth.getSession(),timeout]);
-    if(session){currentUser=session.user;authReady=true;showApp();await load();}
+    if(session){currentUser=session.user;currentAccessToken=session.access_token;authReady=true;showApp();await load();}
     else showLogin();
   }catch(e){
     console.warn('tryRestoreSession:',e.message||e);
@@ -729,10 +733,13 @@ async function initAuth(){
   sb.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_IN'||event==='TOKEN_REFRESHED'){
       if(!session)return;
-      if(currentUser?.id===session.user.id&&authReady)return;  // de-dupe
+      // Always refresh the cached access token (TOKEN_REFRESHED fires periodically),
+      // even when we de-dupe the load. Pagehide flush needs a current token.
+      currentAccessToken=session.access_token;
+      if(currentUser?.id===session.user.id&&authReady)return;  // de-dupe load
       currentUser=session.user;authReady=true;showApp();await load();
     }
-    else if(event==='SIGNED_OUT'){currentUser=null;authReady=false;diary={};allUsersDiary={};unlockedThisSession=new Set();showLogin();}
+    else if(event==='SIGNED_OUT'){currentUser=null;currentAccessToken=null;authReady=false;diary={};allUsersDiary={};unlockedThisSession=new Set();showLogin();}
   });
   // Generous 60s timeout — wake-from-sleep refresh can take >20s on slow networks
   await tryRestoreSession(60000);
@@ -964,35 +971,100 @@ async function saveNow(){
   renderRec();renderSmry();
 }
 
+// ── Sync-error banner (sticky until the next successful save) ──────────────
+let _lastFailedDate=null;
+function showSyncBanner(date,msg){
+  _lastFailedDate=date;
+  const el=document.getElementById('sync-err-banner');if(!el)return;
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  el.innerHTML=`<span style="flex:1;min-width:200px">⚠ Couldn’t save ${fmtD(date)} to the cloud — ${esc(msg)}. Your changes are kept on this device; tap Retry to try syncing again.</span>`
+    +`<button onclick="retrySync()" style="font-size:12px;padding:6px 14px;border-radius:4px;border:1.5px solid var(--red);background:#fff;color:var(--red);cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;min-height:36px">Retry</button>`;
+  el.style.display='flex';
+}
+function clearSyncBanner(){
+  _lastFailedDate=null;
+  const el=document.getElementById('sync-err-banner');
+  if(el){el.style.display='none';el.innerHTML='';}
+}
+async function retrySync(){
+  if(!_lastFailedDate)return clearSyncBanner();
+  const date=_lastFailedDate;
+  if(!currentUser?.id){alert('Sign in to sync these changes.');return;}
+  if(!diary[date]||isDayEmpty(diary[date])){clearSyncBanner();return;}
+  const el=document.getElementById('sync-err-banner');
+  if(el)el.style.opacity='0.6';
+  try{
+    const {error}=await sb.from('diary').upsert(
+      {date,user_id:currentUser.id,data:{...diary[date],_userEmail:currentUser.email}},
+      {onConflict:'date,user_id'}
+    );
+    if(error)showSyncBanner(date,error.message||'unknown error');
+    else clearSyncBanner();
+  }catch(e){showSyncBanner(date,e.message||'network error');}
+  if(el)el.style.opacity='1';
+}
+
+// Backup flush when the tab is hidden/closed. The main save() path is no longer
+// debounced, so this only matters for the rare case where the in-flight fetch
+// would otherwise be killed by the browser on unload. Uses keepalive so the
+// request survives page teardown.
+function _pageHideFlush(){
+  if(!currentUser?.id||!currentAccessToken)return;
+  const d=editDate;
+  if(!diary[d]||isDayEmpty(diary[d]))return;
+  try{
+    const body=JSON.stringify([{date:d,user_id:currentUser.id,data:{...diary[d],_userEmail:currentUser.email}}]);
+    fetch(SUPA_URL+'/rest/v1/diary?on_conflict=date,user_id',{
+      method:'POST',keepalive:true,
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+currentAccessToken,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+      body
+    });
+  }catch(e){}
+}
+window.addEventListener('pagehide',_pageHideFlush);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)_pageHideFlush();});
+
+// Persistence: every save() now writes localStorage synchronously AND fires the
+// Supabase upsert immediately (no debounce). The previous 400 ms timer was the
+// main reason discrete edits sometimes didn't reach the cloud — if the user
+// navigated/closed within that window, the upsert never fired and the next
+// session's server fetch reverted the local change.
 function save(){
-  const targetDate=editDate;  // Bug A fix: capture at call time so setTimeout writes the right row
+  const targetDate=editDate;
   try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
   const el=document.getElementById('sav-ind');
   if(el){el.textContent='Saving...';el.classList.add('show');}
-  clearTimeout(saveT);
-  saveT=setTimeout(async()=>{
-    saveT=null;
-    if(!currentUser?.id){
-      if(el){el.textContent='Local only — not signed in';setTimeout(()=>el.classList.remove('show'),1800);}
-      return;
-    }
-    // Don't auto-create a Supabase row for a day that has nothing in it yet.
-    // First real edit will flip isDayEmpty to false and a subsequent save() will sync.
-    if(isDayEmpty(diary[targetDate])){
-      if(el){el.textContent='';el.classList.remove('show');}
-      renderRec();renderSmry();
-      return;
-    }
-    try{
-      const {error}=await sb.from('diary').upsert({date:targetDate,user_id:currentUser.id,data:{...(diary[targetDate]||{}),_userEmail:currentUser.email}},{onConflict:'date,user_id'});
-      if(error)console.warn('Supabase save error:',error);
-      if(el){el.textContent=error?('Sync failed — '+(error.message||'unknown')):'Synced ✓';setTimeout(()=>el.classList.remove('show'),error?3000:1500);}
-    } catch(e){
-      console.warn('Supabase save exception:',e);
-      if(el){el.textContent='Local only ✓';setTimeout(()=>el.classList.remove('show'),1500);}
+  clearTimeout(saveT);saveT=null;
+  if(!currentUser?.id){
+    if(el){el.textContent='Local only — not signed in';setTimeout(()=>el.classList.remove('show'),1800);}
+    renderRec();renderSmry();
+    return;
+  }
+  // Don't auto-create a Supabase row for a day that has nothing in it yet.
+  if(isDayEmpty(diary[targetDate])){
+    if(el){el.textContent='';el.classList.remove('show');}
+    renderRec();renderSmry();
+    return;
+  }
+  sb.from('diary').upsert(
+    {date:targetDate,user_id:currentUser.id,data:{...(diary[targetDate]||{}),_userEmail:currentUser.email}},
+    {onConflict:'date,user_id'}
+  ).then(({error})=>{
+    if(error){
+      console.warn('Supabase save error:',error);
+      showSyncBanner(targetDate,error.message||'unknown error');
+      if(el){el.textContent='Sync failed — '+(error.message||'unknown');setTimeout(()=>el.classList.remove('show'),3500);}
+    } else {
+      clearSyncBanner();
+      if(el){el.textContent='Synced ✓';setTimeout(()=>el.classList.remove('show'),1500);}
     }
     renderRec();renderSmry();
-  },400);
+  }).catch(e=>{
+    console.warn('Supabase save exception:',e);
+    showSyncBanner(targetDate,e.message||'network error');
+    if(el){el.textContent='Save error';setTimeout(()=>el.classList.remove('show'),2500);}
+    renderRec();renderSmry();
+  });
 }
 
 // ── Navigation ───────────────────────────────────
