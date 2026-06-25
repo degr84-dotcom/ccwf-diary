@@ -852,23 +852,19 @@ async function load(){
     const timeoutPromise=new Promise((_,r)=>setTimeout(()=>r(new Error('fetch timeout')),15000));
     const {data,error}=await Promise.race([fetchPromise,timeoutPromise]);
     if(!error&&data){
+      // Shared diary: one row per date for the whole crew. Load every row keyed by
+      // date regardless of which user last edited it — no per-user filtering.
       const serverDatesForUser=new Set();
       data.forEach(row=>{
-        if(row.user_id===currentUser?.id){
-          // Don't let a late-arriving fetch clobber a day the user is actively working
-          // on: one they unlocked this session, or the past day they currently have open.
-          const editingThis=row.date===editDate&&row.date<today&&diary[row.date]&&!isDayEmpty(diary[row.date]);
-          if(unlockedThisSession.has(row.date)){
-            if(diary[row.date])diary[row.date].locked=false;  // keep local, ensure unlocked
-          }else if(!editingThis){
-            diary[row.date]=row.data;      // server wins for dates present on both
-          }                                 // else: keep local for the open day
-          serverDatesForUser.add(row.date);
-        }
-        if(isAdmin()&&row.user_id!==currentUser?.id){
-          if(!allUsersDiary[row.user_id])allUsersDiary[row.user_id]={email:row.data?._userEmail||row.user_id,records:{}};
-          allUsersDiary[row.user_id].records[row.date]=row.data;
-        }
+        // Don't let a late-arriving fetch clobber a day the user is actively working
+        // on: one they unlocked this session, or the past day they currently have open.
+        const editingThis=row.date===editDate&&row.date<today&&diary[row.date]&&!isDayEmpty(diary[row.date]);
+        if(unlockedThisSession.has(row.date)){
+          if(diary[row.date])diary[row.date].locked=false;  // keep local, ensure unlocked
+        }else if(!editingThis){
+          diary[row.date]=row.data;      // server wins for dates present on both
+        }                                 // else: keep local for the open day
+        serverDatesForUser.add(row.date);
       });
 
       // Drop orphaned empty entries from local cache: dates that aren't on the server
@@ -886,7 +882,7 @@ async function load(){
       const localOnly=Object.keys(localCache).filter(d=>!serverDatesForUser.has(d)&&!isDayEmpty(localCache[d]));
       if(localOnly.length&&currentUser?.id){
         const rows=localOnly.map(d=>({date:d,user_id:currentUser.id,data:{...localCache[d],_userEmail:currentUser.email}}));
-        sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error:syncErr})=>{
+        sb.from('diary').upsert(rows,{onConflict:'date'}).then(({error:syncErr})=>{
           if(syncErr)console.warn('Pending-sync error:',syncErr);
           else console.log('Pushed',localOnly.length,'pending day(s) from local cache to Supabase');
         });
@@ -926,7 +922,7 @@ function autoLockPastDays(){
   });
   try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
   if(!rows.length)return;
-  sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error})=>{
+  sb.from('diary').upsert(rows,{onConflict:'date'}).then(({error})=>{
     if(error)console.warn('Auto-lock sync error:',error);
     else console.log('Auto-locked',rows.length,'past day(s)');
   });
@@ -951,7 +947,7 @@ async function saveNow(){
   try{
     const {error}=await sb.from('diary').upsert(
       {date:editDate,user_id:currentUser.id,data:{...(diary[editDate]||{}),_userEmail:currentUser.email}},
-      {onConflict:'date,user_id'}
+      {onConflict:'date'}
     );
     if(error){
       console.warn('Save failed:',error);
@@ -996,7 +992,7 @@ async function retrySync(){
   try{
     const {error}=await sb.from('diary').upsert(
       {date,user_id:currentUser.id,data:{...diary[date],_userEmail:currentUser.email}},
-      {onConflict:'date,user_id'}
+      {onConflict:'date'}
     );
     if(error)showSyncBanner(date,error.message||'unknown error');
     else clearSyncBanner();
@@ -1014,7 +1010,7 @@ function _pageHideFlush(){
   if(!diary[d]||isDayEmpty(diary[d]))return;
   try{
     const body=JSON.stringify([{date:d,user_id:currentUser.id,data:{...diary[d],_userEmail:currentUser.email}}]);
-    fetch(SUPA_URL+'/rest/v1/diary?on_conflict=date,user_id',{
+    fetch(SUPA_URL+'/rest/v1/diary?on_conflict=date',{
       method:'POST',keepalive:true,
       headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+currentAccessToken,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
       body
@@ -1048,7 +1044,7 @@ function save(){
   }
   sb.from('diary').upsert(
     {date:targetDate,user_id:currentUser.id,data:{...(diary[targetDate]||{}),_userEmail:currentUser.email}},
-    {onConflict:'date,user_id'}
+    {onConflict:'date'}
   ).then(({error})=>{
     if(error){
       console.warn('Supabase save error:',error);
@@ -1572,6 +1568,7 @@ function renderToday(){
         <div>
           <div class="page-title"><span id="diary-date-label">${d===today?'Today':'Editing'}</span></div>
           <div class="page-sub">Clarke Creek Wind Farm</div>
+          ${diary[d]&&diary[d]._userEmail?`<div class="page-sub" style="font-size:11px;color:var(--text-3)">Last edited by ${String(diary[d]._userEmail).split('@')[0]}</div>`:''}
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <input type="date" id="diary-date-picker" value="${d}" max="${today}" 
@@ -2072,7 +2069,7 @@ function importData(event){
       try{
         if(currentUser?.id){
           const rows=Object.entries(diary).map(([date,d])=>({date,user_id:currentUser.id,data:{...d,_userEmail:currentUser.email}}));
-          const {error}=await sb.from('diary').upsert(rows,{onConflict:'date,user_id'});
+          const {error}=await sb.from('diary').upsert(rows,{onConflict:'date'});
           if(error)console.warn('Import sync error:',error);
         }
       }catch(e){console.warn('Import sync error:',e);}
@@ -2344,7 +2341,7 @@ function _confirmAndApplyImport(daysObj,opts){
   if(currentUser?.id){
     const rows=dates.filter(dt=>!isDayEmpty(diary[dt])).map(dt=>({date:dt,user_id:currentUser.id,data:{...diary[dt],_userEmail:currentUser.email}}));
     if(rows.length){
-      sb.from('diary').upsert(rows,{onConflict:'date,user_id'}).then(({error})=>{
+      sb.from('diary').upsert(rows,{onConflict:'date'}).then(({error})=>{
         if(error){console.warn('Import sync error:',error);alert('Imported on this device, but cloud sync failed: '+(error.message||'unknown')+'\nIt will retry next time you open the app.');}
       });
     }
