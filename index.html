@@ -2156,7 +2156,11 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
     } else {
       allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
       allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
-      if(!allPlant.length&&!allPers.length){doc.setTextColor(...grey);doc.setFontSize(9);doc.text('No plant or personnel recorded',ml,y);y+=7;doc.setTextColor(...black);}
+      // Custom plant + personnel: previously skipped, which made the PDF Subtotal and
+      // DAY TOTAL diverge by the customs' cost and broke text-scrape re-import.
+      (d.customPlant||[]).forEach(c=>{const r=plantConfig.plantOverrides[c.name]??c.rate??0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(c.name,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      (d.customPers||[]).forEach(c=>{const r=plantConfig.persOverrides[c.name]??c.rate??0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(c.name,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      if(!allPlant.length&&!allPers.length&&!(d.customPlant||[]).length&&!(d.customPers||[]).length){doc.setTextColor(...grey);doc.setFontSize(9);doc.text('No plant or personnel recorded',ml,y);y+=7;doc.setTextColor(...black);}
     }
     const fuelAmt=(d.fuelL||0)*FUEL_R;
     if(fuelAmt>0){doc.setFontSize(9);doc.text(`Fuel (${d.fuelL}L × $2.50/L)`,ml,y);doc.text(money(fuelAmt),W-mr,y,{align:'right'});y+=7;}
