@@ -1989,8 +1989,8 @@ function openSheet(date){
     plantRows=`<tr><td colspan="2" style="color:var(--text-3);font-style:italic">Stand down — plant & personnel costs replaced</td><td class="mono">${money(SD_R)}</td></tr>`;
     plantTotal=SD_R;
   } else {
-    allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantTotal+=r;plantRows+=`<tr><td>${p}</td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(r)}/day</td><td class="mono">${money(r)}</td></tr>`;});
-    allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantTotal+=r;plantRows+=`<tr><td>${p}</td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(r)}/day</td><td class="mono">${money(r)}</td></tr>`;});
+    allPlant.forEach(p=>{const r=getRate(p);plantTotal+=r;plantRows+=`<tr><td>${p}</td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(r)}/day</td><td class="mono">${money(r)}</td></tr>`;});
+    allPers.forEach(p=>{const r=getRate(p);plantTotal+=r;plantRows+=`<tr><td>${p}</td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(r)}/day</td><td class="mono">${money(r)}</td></tr>`;});
     (d.customPlant||[]).forEach(c=>{plantTotal+=c.rate||0;plantRows+=`<tr><td>${c.name} <em style="color:#E67E22;font-size:11px">custom</em></td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(c.rate||0)}/day</td><td class="mono">${money(c.rate||0)}</td></tr>`;});
     (d.customPers||[]).forEach(c=>{plantTotal+=c.rate||0;plantRows+=`<tr><td>${c.name} <em style="color:#E67E22;font-size:11px">custom</em></td><td style="color:var(--text-3);font-family:'DM Mono',monospace">${money(c.rate||0)}/day</td><td class="mono">${money(c.rate||0)}</td></tr>`;});
     if(!allPlant.length&&!allPers.length&&!(d.customPlant||[]).length&&!(d.customPers||[]).length)plantRows=`<tr><td colspan="3" style="color:var(--text-3);font-style:italic">No plant or personnel recorded</td></tr>`;
@@ -2151,8 +2151,11 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
       doc.setFontSize(9);doc.text('Stand down — plant & personnel costs replaced',ml,y);
       doc.text(money(SD_R),W-mr,y,{align:'right'});plantSubtotal=SD_R;y+=7;
     } else {
-      allPlant.forEach(p=>{const r=PLANT_RATES[p]||0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
-      allPers.forEach(p=>{const r=PERS_RATES[p]||0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      // Price via getRate() (not the built-in table) so custom plant/personnel selected
+      // into the plant/personnel arrays print their real rate and the PDF Subtotal
+      // matches the DAY TOTAL, which also uses getRate().
+      allPlant.forEach(p=>{const r=getRate(p);plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
+      allPers.forEach(p=>{const r=getRate(p);plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(p,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
       // Custom plant + personnel: previously skipped, which made the PDF Subtotal and
       // DAY TOTAL diverge by the customs' cost and broke text-scrape re-import.
       (d.customPlant||[]).forEach(c=>{const r=plantConfig.plantOverrides[c.name]??c.rate??0;plantSubtotal+=r;ensureSpace(7);doc.setFontSize(9);doc.text(c.name,ml,y);doc.setTextColor(...grey);doc.text(money(r)+'/day',ml+100,y);doc.setTextColor(...black);doc.text(money(r),W-mr,y,{align:'right'});y+=7;});
