@@ -780,7 +780,38 @@ async function initAuth(){
   // Auto-retry session restore when network comes back or tab becomes visible.
   // This is the wake-from-sleep / reconnect path that previously kicked users to login.
   window.addEventListener('online',()=>{if(!authReady)tryRestoreSession(30000);});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!authReady)tryRestoreSession(30000);});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)return;
+    if(!authReady)tryRestoreSession(30000); else refreshFromServer();
+  });
+  // Re-sync whenever the tab regains focus or the network returns, so a card/diary
+  // change made on another device (or by another user) shows up without a manual reload.
+  window.addEventListener('focus',()=>{if(authReady)refreshFromServer();});
+  window.addEventListener('online',()=>{if(authReady)refreshFromServer();});
+}
+
+// Quiet re-sync of the shared rate card and diary from the server (no "Syncing…" UI).
+// Server wins for every date except the one being actively edited. Throttled.
+let _lastRefresh=0;
+async function refreshFromServer(){
+  if(!currentUser?.id||document.hidden||typeof sb==='undefined'||!sb)return;
+  const now=Date.now();
+  if(now-_lastRefresh<3000)return;
+  _lastRefresh=now;
+  try{
+    await _pullPlantConfig();
+    const {data,error}=await sb.from('diary').select('*');
+    if(!error&&data){
+      data.forEach(row=>{
+        const editingThis=row.date===editDate&&row.date<today&&diary[row.date]&&!isDayEmpty(diary[row.date]);
+        if(unlockedThisSession.has(row.date)){ if(diary[row.date])diary[row.date].locked=false; }
+        else if(!editingThis){ diary[row.date]=row.data; }
+      });
+      Object.keys(diary).forEach(d=>migrateDayRecord(diary[d]));
+      try{localStorage.setItem(KEY,JSON.stringify(diary));}catch(e){}
+    }
+    renderToday();renderRec();renderSmry();
+  }catch(e){console.warn('refreshFromServer failed:',e.message||e);}
 }
 
 function showLogin(){
