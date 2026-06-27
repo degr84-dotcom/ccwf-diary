@@ -659,7 +659,40 @@ function loadPlantConfig(){
   if(plantConfig.fuelRate===undefined)plantConfig.fuelRate=null;
   if(plantConfig.standDownRate===undefined)plantConfig.standDownRate=null;
 }
-function savePlantConfig(){try{localStorage.setItem(PLANT_CFG_KEY,JSON.stringify(plantConfig));}catch(e){}}
+function savePlantConfig(){try{localStorage.setItem(PLANT_CFG_KEY,JSON.stringify(plantConfig));}catch(e){}_pushPlantConfig();}
+// ── Shared rate card (custom plant/personnel + overrides) via Supabase ──────
+// The rate card is the same for the whole crew, so it lives in app_config and is
+// shared across users/devices. Without this, one user's custom plant resolves to $0
+// in another user's records. save → push; load → pull + union + push.
+function _pushPlantConfig(){
+  try{
+    if(!currentUser?.id||typeof sb==='undefined'||!sb)return;
+    sb.from('app_config').upsert({id:'plantConfig',data:plantConfig,updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'id'})
+      .then(({error})=>{if(error)console.warn('Rate card sync error:',error);});
+  }catch(e){console.warn('Rate card push failed:',e);}
+}
+function _mergePlantConfig(remote){
+  if(!remote||typeof remote!=='object')return;
+  const byName=arr=>{const m={};(arr||[]).forEach(c=>{if(c&&c.name)m[c.name]=c;});return m;};
+  plantConfig.customPlant=Object.values({...byName(plantConfig.customPlant),...byName(remote.customPlant)});
+  plantConfig.customPers=Object.values({...byName(plantConfig.customPers),...byName(remote.customPers)});
+  plantConfig.plantOverrides={...(plantConfig.plantOverrides||{}),...(remote.plantOverrides||{})};
+  plantConfig.persOverrides={...(plantConfig.persOverrides||{}),...(remote.persOverrides||{})};
+  plantConfig.removedPlant=Array.from(new Set([...(plantConfig.removedPlant||[]),...(remote.removedPlant||[])]));
+  plantConfig.removedPers=Array.from(new Set([...(plantConfig.removedPers||[]),...(remote.removedPers||[])]));
+  if(remote.fuelRate!=null)plantConfig.fuelRate=remote.fuelRate;
+  if(remote.standDownRate!=null)plantConfig.standDownRate=remote.standDownRate;
+}
+async function _pullPlantConfig(){
+  try{
+    if(typeof sb==='undefined'||!sb)return;
+    const {data,error}=await sb.from('app_config').select('data').eq('id','plantConfig').maybeSingle();
+    if(error||!data||!data.data)return;
+    _mergePlantConfig(data.data);
+    try{localStorage.setItem(PLANT_CFG_KEY,JSON.stringify(plantConfig));}catch(e){}
+    _pushPlantConfig();  // propagate any local-only customs into the shared card
+  }catch(e){console.warn('Rate card pull failed:',e);}
+}
 function getFuelRate(){return plantConfig.fuelRate!=null?plantConfig.fuelRate:FUEL_R;}
 function getStandDownRate(){return plantConfig.standDownRate!=null?plantConfig.standDownRate:SD_R;}
 function getRate(name){
@@ -896,6 +929,10 @@ async function load(){
       renderToday();renderRec();renderSmry();
     }
   } catch(e){console.warn('Load error (will keep cached UI):',e.message||e);}
+  // Pull the shared rate card so custom plant/personnel and rates resolve identically
+  // for every user, then re-render costs with the merged rates.
+  await _pullPlantConfig();
+  renderToday();renderRec();renderSmry();
   if(el)el.classList.remove('show');
 }
 
