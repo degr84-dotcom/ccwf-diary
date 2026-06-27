@@ -2270,6 +2270,16 @@ function _embedDiaryPayload(doc,dates){
       if(!rec)return;
       const clean={...rec};
       delete clean._userEmail;
+      // Make the payload self-contained for rates. Custom plant/personnel selected into
+      // the plant/personnel arrays are stored as names only — their rates live in per-device
+      // config (plantConfig), so importing on another device would price them at $0 and not
+      // match the printed sheet. Fold those customs into customPlant/customPers with their
+      // resolved rate (same rate the PDF prints), so an import reproduces the sheet exactly.
+      const plantArr=[],persArr=[];
+      const custPlant=[...(clean.customPlant||[])],custPers=[...(clean.customPers||[])];
+      (clean.plant||[]).forEach(n=>{ if(PLANT_RATES[n]!=null)plantArr.push(n); else custPlant.push({name:n,rate:getRate(n)}); });
+      (clean.personnel||[]).forEach(n=>{ if(PERS_RATES[n]!=null)persArr.push(n); else custPers.push({name:n,rate:getRate(n)}); });
+      clean.plant=plantArr;clean.personnel=persArr;clean.customPlant=custPlant;clean.customPers=custPers;
       days[dt]=clean;
     });
     const json=JSON.stringify({v:1,app:'ccwf-diary',days});
