@@ -2262,30 +2262,58 @@ function _renderDaySheetToDoc(doc,date,photoBundles){
 // later. jsPDF writes /Info as plain (uncompressed) text, so import can read it
 // straight from the file bytes — no PDF library needed.
 const PDF_PAYLOAD_TAG='CCWFDIARYv1:';
+// Build the base64 import payload for the given dates. Custom plant/personnel that were
+// selected into the plant/personnel arrays carry no rate (rates live in per-device config),
+// so fold them into customPlant/customPers with their resolved rate — that way an import
+// reproduces the printed sheet exactly on any device.
+function _buildPayloadB64(dates){
+  const days={};
+  (dates||[]).forEach(dt=>{
+    const rec=diary[dt];
+    if(!rec)return;
+    const clean={...rec};
+    delete clean._userEmail;
+    const plantArr=[],persArr=[];
+    const custPlant=[...(clean.customPlant||[])],custPers=[...(clean.customPers||[])];
+    (clean.plant||[]).forEach(n=>{ if(PLANT_RATES[n]!=null)plantArr.push(n); else custPlant.push({name:n,rate:getRate(n)}); });
+    (clean.personnel||[]).forEach(n=>{ if(PERS_RATES[n]!=null)persArr.push(n); else custPers.push({name:n,rate:getRate(n)}); });
+    clean.plant=plantArr;clean.personnel=persArr;clean.customPlant=custPlant;clean.customPers=custPers;
+    days[dt]=clean;
+  });
+  const json=JSON.stringify({v:1,app:'ccwf-diary',days});
+  return btoa(unescape(encodeURIComponent(json)));
+}
+// Also write the payload into PDF metadata (kept for backward compatibility with importers
+// that only scan /Info). The primary, reliable carrier is the appended marker below.
 function _embedDiaryPayload(doc,dates){
+  try{ doc.setProperties({title:'CCWF Day Sheet',creator:'CCWF Civil Works Site Diary',keywords:PDF_PAYLOAD_TAG+_buildPayloadB64(dates)}); }
+  catch(e){console.warn('Embed payload (metadata) failed:',e);}
+}
+// Download the PDF with the payload appended after the final %%EOF as a comment line.
+// jsPDF's metadata round-trip proved unreliable in some browsers; bytes appended after
+// %%EOF are ignored by PDF readers but are trivially recoverable by a raw byte scan, so
+// this is the dependable import carrier.
+function _downloadPdfWithPayload(doc,dates,filename){
+  let bytes;
+  try{ bytes=new Uint8Array(doc.output('arraybuffer')); }
+  catch(e){ console.warn('PDF output failed, using doc.save():',e); doc.save(filename); return; }
   try{
-    const days={};
-    (dates||[]).forEach(dt=>{
-      const rec=diary[dt];
-      if(!rec)return;
-      const clean={...rec};
-      delete clean._userEmail;
-      // Make the payload self-contained for rates. Custom plant/personnel selected into
-      // the plant/personnel arrays are stored as names only — their rates live in per-device
-      // config (plantConfig), so importing on another device would price them at $0 and not
-      // match the printed sheet. Fold those customs into customPlant/customPers with their
-      // resolved rate (same rate the PDF prints), so an import reproduces the sheet exactly.
-      const plantArr=[],persArr=[];
-      const custPlant=[...(clean.customPlant||[])],custPers=[...(clean.customPers||[])];
-      (clean.plant||[]).forEach(n=>{ if(PLANT_RATES[n]!=null)plantArr.push(n); else custPlant.push({name:n,rate:getRate(n)}); });
-      (clean.personnel||[]).forEach(n=>{ if(PERS_RATES[n]!=null)persArr.push(n); else custPers.push({name:n,rate:getRate(n)}); });
-      clean.plant=plantArr;clean.personnel=persArr;clean.customPlant=custPlant;clean.customPers=custPers;
-      days[dt]=clean;
-    });
-    const json=JSON.stringify({v:1,app:'ccwf-diary',days});
-    const b64=btoa(unescape(encodeURIComponent(json)));
-    doc.setProperties({title:'CCWF Day Sheet',creator:'CCWF Civil Works Site Diary',keywords:PDF_PAYLOAD_TAG+b64});
-  }catch(e){console.warn('Embed payload failed:',e);}
+    const b64=_buildPayloadB64(dates);
+    if(b64){
+      const marker='\n%'+PDF_PAYLOAD_TAG+b64+'\n';
+      const mb=new Uint8Array(marker.length);
+      for(let i=0;i<marker.length;i++)mb[i]=marker.charCodeAt(i)&0xff;
+      const merged=new Uint8Array(bytes.length+mb.length);
+      merged.set(bytes,0);merged.set(mb,bytes.length);
+      bytes=merged;
+    }
+  }catch(e){console.warn('Payload append failed:',e);}
+  try{
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(e){console.warn('Blob download failed, using doc.save():',e);doc.save(filename);}
 }
 
 function triggerImportPDF(){const i=document.getElementById('pdf-import-input');if(i)i.click();}
@@ -2293,21 +2321,33 @@ function handleImportPDFInput(e){const f=e.target.files&&e.target.files[0];e.tar
 
 async function importDaySheetPDF(file){
   if(!file)return;
-  // 1) Preferred path: structured data embedded in the PDF metadata (new sheets).
-  let payload=null;
+  // 1) Preferred path: structured data embedded in the PDF (new sheets). The payload is
+  // carried both as an appended %%EOF-comment (reliable) and in /Info metadata (legacy).
+  // Scan for every copy and try the LAST one first (the appended marker), since a stale
+  // or mangled metadata copy can appear earlier in the file.
+  let payload=null,_dbg='no embedded payload tag found';
   try{
     const buf=new Uint8Array(await file.arrayBuffer());
     const txt=new TextDecoder('latin1').decode(buf);
-    const m=txt.match(new RegExp(PDF_PAYLOAD_TAG+'([A-Za-z0-9+/=]+)'));
-    if(m){
-      const json=decodeURIComponent(escape(atob(m[1])));
-      payload=JSON.parse(json);
+    const re=new RegExp(PDF_PAYLOAD_TAG+'([A-Za-z0-9+/=]+)','g');
+    const cands=[];let mm;
+    while((mm=re.exec(txt))!==null)cands.push(mm[1]);
+    if(cands.length){
+      _dbg=cands.length+' payload tag(s) found, but none decoded';
+      for(let i=cands.length-1;i>=0;i--){
+        try{
+          const json=decodeURIComponent(escape(atob(cands[i])));
+          const p=JSON.parse(json);
+          if(p&&p.days&&typeof p.days==='object'&&Object.keys(p.days).length){payload=p;break;}
+        }catch(e){_dbg=cands.length+' payload tag(s) found; decode error: '+(e.message||e);}
+      }
     }
-  }catch(e){console.warn('PDF import parse error:',e);}
+  }catch(e){_dbg='read error: '+(e.message||e);}
   if(payload&&payload.days&&typeof payload.days==='object'&&Object.keys(payload.days).length){
     _confirmAndApplyImport(payload.days);
     return;
   }
+  console.warn('Embedded payload not used →',_dbg,'; falling back to text-scrape.');
   // 2) Fallback: read the printed text off an older app-generated sheet.
   let sheets=null;
   try{sheets=await _scrapeDaySheetPDF(file);}catch(e){console.warn('PDF scrape error:',e);}
@@ -2532,7 +2572,7 @@ async function generatePDF(){
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     _renderDaySheetToDoc(doc,date,photoBundles);
     _embedDiaryPayload(doc,[date]);
-    doc.save(`CCWF_Day_Sheet_${date}.pdf`);
+    _downloadPdfWithPayload(doc,[date],`CCWF_Day_Sheet_${date}.pdf`);
   }catch(err){console.error(err);alert('PDF generation failed: '+err.message);}
   if(btn){btn.textContent='⬇ Download PDF';btn.disabled=false;}
 }
@@ -2563,7 +2603,7 @@ async function generateRangePDF(){
       _renderDaySheetToDoc(doc,date,photoBundles);
     }
     _embedDiaryPayload(doc,dates);
-    doc.save(`CCWF_Day_Sheets_${from}_to_${to}.pdf`);
+    _downloadPdfWithPayload(doc,dates,`CCWF_Day_Sheets_${from}_to_${to}.pdf`);
   }catch(err){console.error(err);alert('Range PDF generation failed: '+err.message);}
   if(btn){btn.textContent='⬇ Download range PDF';btn.disabled=false;}
 }
